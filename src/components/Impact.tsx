@@ -65,7 +65,7 @@ export function Impact() {
                                 Stable
                                 </div>
                             </div> */}
-                            <img src="/boavista_mapa.png" alt="Forest texture" className="w-full h-full object-cover grayscale" />
+                            <img src="/mapacaminho.jpeg" alt="Forest texture" className="w-full h-full object-cover " />
                         </div>
                     </motion.div>
 

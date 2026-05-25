@@ -47,7 +47,7 @@ export function Hero() {
 
                         <h1 className="text-5xl md:text-7xl font-serif font-bold text-white leading-tight mb-6">
                             Bem-vindo ao <br />
-                            <span className="text-[#c43d3d]">Tech-Gest: GPL!</span>
+                            <span className="text-[#c43d3d]">Tech-Gest: DNP!</span>
                         </h1>
 
                         <p className="text-lg md:text-xl text-stone-200 mb-8 max-w-2xl leading-relaxed">
@@ -78,25 +78,21 @@ export function Hero() {
                     <div className="flex items-center gap-3">
                         <div className="text-3xl font-serif font-bold text-[#e71313]">2</div>
                         <div className="text-sm leading-tight">
-                            Municípios
+                            Corredores de 
                             <br />
-                            Ingombota e Sambizanga.
+                           Caminho de Ferro.
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
-                        <div className="text-3xl font-serif font-bold text-[#e71313]">4.300+</div>
+                        <div className="text-3xl font-serif font-bold text-[#e71313]">479 Km</div>
                         <div className="text-sm leading-tight">
-                            Habitações
-                            <br />
-                            Estimativa inicial em áreas de intervenção
-                        </div>
+                            Luanda a Malanje
+              </div>
                     </div>
                     <div className="flex items-center gap-3">
-                        <div className="text-3xl font-serif font-bold text-[#e71313]">36</div>
+                        <div className="text-3xl font-serif font-bold text-[#e71313]">1.344 Km</div>
                         <div className="text-sm leading-tight">
-                            Hectares
-                            <br />
-                            Mapeamento detalhado no Sector Madeira
+                            Lobito ao Luau
                         </div>
                     </div>
                 </div>

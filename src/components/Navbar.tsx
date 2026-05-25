@@ -22,7 +22,7 @@ export function Navbar() {
                         <img width={40} height={20} src={"/client_luanda1.png"} alt="Forest texture" className="" />
                     </div>
                     <span className={`font-serif font-bold text-md tracking-tight ${isScrolled ? "text-[#c43d3d]" : "text-white"}`}>
-                        Tech-Gest: <span className="text-[#c43d3d]">GPL</span>
+                        Tech-Gest: <span className="text-[#c43d3d]">DNP</span>
                         <span className="text-[#d89595] text-[10px] mx-2">POWERED BY</span>
                     </span>
 
