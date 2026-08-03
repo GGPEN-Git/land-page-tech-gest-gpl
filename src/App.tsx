@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Navbar } from "./components/Navbar";
 import { Hero } from "./components/Hero";
 import { Mission } from "./components/Mission";
@@ -6,14 +6,43 @@ import { HowItWorks } from "./components/HowItWorks";
 import { Impact } from "./components/Impact";
 import { Community } from "./components/Community";
 import { Footer } from "./components/Footer";
+import { Login } from "./components/Login";
+import { Dashboard } from "./components/Dashboard";
 import { Button } from "./components/ui/Button";
 export function App() {
+    const [view, setView] = useState<"landing" | "login" | "dashboard">("landing");
+    const [utilizador, setUtilizador] = useState("");
+
+    if (view === "login") {
+        return (
+            <Login
+                onBack={() => setView("landing")}
+                onSuccess={(email) => {
+                    setUtilizador(email);
+                    setView("dashboard");
+                }}
+            />
+        );
+    }
+
+    if (view === "dashboard") {
+        return (
+            <Dashboard
+                utilizador={utilizador}
+                onLogout={() => {
+                    setUtilizador("");
+                    setView("landing");
+                }}
+            />
+        );
+    }
+
     return (
         <div className="min-h-screen bg-stone-50 font-sans text-stone-900 selection:bg-[#c4703d] selection:text-white">
             <Navbar />
 
             <main>
-                <Hero />
+                <Hero onLogin={() => setView("login")} />
                 <Mission />
                 <HowItWorks />
                 <Impact />
@@ -30,10 +59,8 @@ export function App() {
                             Join our network of conservationists, researchers, and community leaders working to protect Angola's coastline.
                         </p> */}
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                            <Button size="lg" variant="primary">
-                                <a href="https://gedae.ggpen.gov.ao/tech-gest-gpl" rel="noopener noreferrer">
-                                    Aceder a Plataforma
-                                </a>
+                            <Button size="lg" variant="primary" onClick={() => setView("login")}>
+                                Aceder a Plataforma
                             </Button>
                             {/* <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10">
                                 Contact Our Team

@@ -11,6 +11,7 @@
         "preview": "npx vite preview"
     },
     "dependencies": {
+        "@arcgis/core": "4.31",
         "clsx": "latest",
         "framer-motion": "^11.5.4",
         "lucide-react": "0.522.0",

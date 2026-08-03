@@ -2,7 +2,10 @@ import React from "react";
 import { motion } from "framer-motion";
 import { Button } from "./ui/Button";
 import { ArrowRight, Satellite } from "lucide-react";
-export function Hero() {
+interface HeroProps {
+    onLogin?: () => void;
+}
+export function Hero({ onLogin }: HeroProps) {
     return (
         <section className="relative h-screen min-h-[800px] flex items-center overflow-hidden">
             {/* Background Image - Mangrove Forest */}
@@ -56,11 +59,9 @@ export function Hero() {
                         </p>
 
                         <div className="flex flex-col sm:flex-row gap-4">
-                            <Button size="lg" className="group">
-                                <a className="flex items-center" href="https://gedae.ggpen.gov.ao/tech-gest-gpl" rel="noopener noreferrer">
-                                    Login
-                                    <ArrowRight className="ml-2 w-5 h-5 transition-transform group-hover:translate-x-1" />
-                                </a>
+                            <Button size="lg" className="group" onClick={onLogin}>
+                                Login
+                                <ArrowRight className="ml-2 w-5 h-5 transition-transform group-hover:translate-x-1" />
                             </Button>
                             <Button variant="outline" size="lg" className="border-white text-white hover:bg-white/10">
                                 <a className="flex items-center" href="./#usmore" rel="noopener noreferrer">

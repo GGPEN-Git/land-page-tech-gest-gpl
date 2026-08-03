@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/Mawete Quihila/land-page-tech-gest-gpl/**)",
+      "Edit(//c/Users/Mawete Quihila/land-page-tech-gest-gpl/**)",
+      "Write(//c/Users/Mawete Quihila/land-page-tech-gest-gpl/**)",
+      "Bash(ls:*)",
+      "Bash(git status:*)",
+      "Bash(git diff:*)",
+      "Bash(git log:*)",
+      "Bash(git branch:*)",
+      "Bash(git show:*)",
+      "Bash(npm run lint:*)",
+      "Bash(npm run build:*)",
+      "Bash(npx tsc --noEmit:*)"
+    ],
+    "deny": [
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(git reset --hard:*)",
+      "Bash(git checkout:*)",
+      "Bash(rm:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run dev:*)",
+      "Read(./.env)",
+      "Read(./.env.*)"
+    ]
+  }
+}
