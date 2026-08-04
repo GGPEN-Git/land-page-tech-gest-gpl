@@ -103,7 +103,12 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
         let cancelado = false;
 
         const efetivas = area?.aoi ? { ...selecoes, [CAMPO_AOI]: area.aoi } : selecoes;
-        const where = construirWhere(efetivas);
+
+        // O filtro base da camada entra antes de tudo e não é removível pela interface.
+        const base = configAtiva.filtroBase;
+        const comBase = (clausula: string) => (base ? comCondicao(clausula, base) : clausula);
+
+        const where = comBase(construirWhere(efetivas));
 
         camada.definitionExpression = where;
         setAConsultar(true);
@@ -139,7 +144,7 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
                 const listas = await Promise.all(
                     FILTROS.map(async (filtro) => {
                         const resultado = await layer.queryFeatures({
-                            where: construirWhere(efetivas, filtro.campo),
+                            where: comBase(construirWhere(efetivas, filtro.campo)),
                             outFields: [filtro.campo],
                             returnDistinctValues: true,
                             returnGeometry: false,
@@ -189,7 +194,7 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
         return () => {
             cancelado = true;
         };
-    }, [camada, area, selecoes, mostraValidacao]);
+    }, [camada, area, selecoes, mostraValidacao, configAtiva]);
 
     function selecionar(campo: string, valor: string | null) {
         setSelecoes((atual) => {

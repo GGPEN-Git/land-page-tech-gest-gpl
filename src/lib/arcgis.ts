@@ -26,6 +26,11 @@ export interface CamadaConfig {
      * Só as camadas de edifícios o têm; os contornos ficam sem.
      */
     campoSimbologia?: typeof CAMPO_VALIDACAO | typeof CAMPO_ESTADO;
+    /**
+     * Condição SQL aplicada sempre, antes de qualquer filtro do utilizador.
+     * O que ficar de fora não é desenhado nem contado em lado nenhum.
+     */
+    filtroBase?: string;
 }
 
 /**
@@ -35,9 +40,12 @@ export interface CamadaConfig {
  */
 export const CAMADA_DADOS: CamadaConfig = {
     id: "residencias-em-risco",
-    titulo: "Edifícios — Boavista & Porto Seco",
+    titulo: "Edifícios — Boavista",
     url: `${BASE}/RESIDENCIAS_EM_RISCO/FeatureServer/0`,
     campoSimbologia: CAMPO_VALIDACAO,
+    // Restringe a camada a Boavista. Porto Seco da Mulemba e os registos com AOI
+    // em branco deixam de ser desenhados e de entrar em qualquer contagem.
+    filtroBase: `${CAMPO_AOI} = 'Boavista'`,
 };
 
 /** Segundo levantamento. Não tem o campo Validacao; o renderer usa Estado. */

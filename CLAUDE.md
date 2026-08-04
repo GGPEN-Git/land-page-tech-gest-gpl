@@ -111,6 +111,8 @@ Os assets do SDK (ícones, fontes) vêm do CDN via `esriConfig.assetsPath`. **Se
 
 **A ÁREA não é um filtro como os outros.** As três áreas não vivem no mesmo sítio: `Boavista` e `Porto Seco da Mulemba` são valores do campo `AOI` dentro de `CAMADA_DADOS`; `Sambizanga` é uma **camada à parte**, cujo `AOI` está vazio. O mapeamento vive em `AREAS` (`lib/arcgis.ts`), e escolher uma área pode trocar a camada ativa — daí estar fora de `FILTROS`.
 
+`CamadaConfig.filtroBase` é uma condição SQL aplicada **antes** de qualquer filtro do utilizador e que a interface não consegue remover. `CAMADA_DADOS` usa `AOI = 'Boavista'`: Porto Seco da Mulemba e os registos com `AOI` em branco não são desenhados nem contados. Entra em todas as consultas via o helper `comBase()` no `Dashboard`.
+
 Consequências no `Dashboard`:
 - `camadaAtivaId` decide qual camada é consultada e qual fica visível; as outras camadas de edifícios são ocultadas e têm o `definitionExpression` limpo.
 - Mudar de área **limpa as restantes seleções** — os bairros de uma área não existem na outra.
