@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
+import { asset } from "../lib/utils";
 
 interface LoginProps {
     onBack?: () => void;
@@ -54,7 +55,7 @@ export function Login({ onBack, onSuccess }: LoginProps) {
             <main className="relative flex-1 flex flex-col items-center justify-center overflow-hidden py-12">
                 {/* Fundo */}
                 <div className="absolute inset-0 z-0">
-                    <img src="/boavista_mapa.png" alt="" aria-hidden="true" className="w-full h-full object-cover" />
+                    <img src={asset("boavista_mapa.png")} alt="" aria-hidden="true" className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-black/35" />
                     <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-black/15 to-black/45" />
                 </div>
@@ -136,11 +137,11 @@ export function Login({ onBack, onSuccess }: LoginProps) {
                     {/* Logos institucionais */}
                     <div className="flex flex-wrap items-center justify-center gap-6 md:gap-8 mt-10">
                         <div className="bg-white rounded-lg border-2 border-white shadow-lg px-6 py-3 flex items-center justify-center">
-                            <img src="/client_luanda1.png" alt="Governo Provincial de Luanda" className="h-12 md:h-14 w-auto object-contain" />
+                            <img src={asset("client_luanda1.png")} alt="Governo Provincial de Luanda" className="h-12 md:h-14 w-auto object-contain" />
                         </div>
 
                         <div className="bg-white rounded-lg border-2 border-white shadow-lg px-6 py-3 flex items-center justify-center">
-                            <img src="/GGPEN_LOGO-scaled.png" alt="GGPEN" className="h-12 md:h-14 w-auto object-contain" />
+                            <img src={asset("GGPEN_LOGO-scaled.png")} alt="GGPEN" className="h-12 md:h-14 w-auto object-contain" />
                         </div>
                     </div>
                 </motion.div>

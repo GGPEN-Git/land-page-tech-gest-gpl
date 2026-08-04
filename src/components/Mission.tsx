@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { CheckCircle2 } from "lucide-react";
+import { asset } from "../lib/utils";
 export function Mission() {
     return (
         <section id="mission" className="py-20 md:py-32 bg-stone-50">
@@ -26,13 +27,13 @@ export function Mission() {
                     >
                         <div className="aspect-[4/5] rounded-2xl overflow-hidden shadow-2xl" id="usmore">
                             <img
-                                src="/2solucao_tech-gest_ip-IF2rDkcZK-transformed.png"
+                                src={asset("2solucao_tech-gest_ip-IF2rDkcZK-transformed.png")}
                                 alt="Angolan community near mangroves"
                                 className="w-full h-full object-cover"
                             />
                         </div>
                         <div className="absolute -bottom-10 -right-10 w-2/3 aspect-square rounded-2xl overflow-hidden shadow-xl border-8 border-stone-50 hidden md:block">
-                            <img src="/3solucao tech-gest ip.PNG" alt="Mangrove roots detail" className="w-full h-full object-cover" />
+                            <img src={asset("3solucao tech-gest ip.PNG")} alt="Mangrove roots detail" className="w-full h-full object-cover" />
                         </div>
                         {/* Decorative element */}
                         <div className="absolute -top-4 -left-4 w-24 h-24 bg-[#c4703d]/10 rounded-full -z-10" />

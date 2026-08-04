@@ -21,7 +21,13 @@ Landing page do **TECH-GEST-GPL** (GEDAE / GGPEN). Site estático de página ún
 | Classes | `clsx` + `tailwind-merge` via helper `cn()` |
 | Mapas | `@arcgis/core` 4.31 (ArcGIS Maps SDK) |
 
-Deploy: GitHub Pages — `homepage` em `package.json` aponta para `https://DDAEGit.github.io/landpageotchiva`.
+## Deploy
+
+**Render**, static site, definido em `render.yaml` (blueprint). Build: `npm ci && npx tsc --noEmit && npm run build`, publica `dist`.
+
+O site é servido na **raiz** do domínio, por isso `BASE_PATH` não é definido e o `base` do Vite fica `/`. O suporte a subcaminho continua no `vite.config.ts` caso volte a ser preciso.
+
+**Nunca escrever caminhos absolutos para ficheiros de `public/`.** Usar `asset("logo.png")` de `lib/utils.ts`, que prefixa com `import.meta.env.BASE_URL` e funciona seja qual for a base.
 
 ## Estrutura
 

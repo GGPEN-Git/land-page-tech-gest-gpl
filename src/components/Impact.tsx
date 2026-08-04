@@ -1,6 +1,7 @@
 import React from "react";
 import { motion } from "framer-motion";
 import { MapPin } from "lucide-react";
+import { asset } from "../lib/utils";
 export function Impact() {
     return (
         <section id="impact" className="py-20 bg-stone-100">
@@ -65,7 +66,7 @@ export function Impact() {
                                 Stable
                                 </div>
                             </div> */}
-                            <img src="/boavista_mapa.png" alt="Forest texture" className="w-full h-full object-cover grayscale" />
+                            <img src={asset("boavista_mapa.png")} alt="Forest texture" className="w-full h-full object-cover grayscale" />
                         </div>
                     </motion.div>
 

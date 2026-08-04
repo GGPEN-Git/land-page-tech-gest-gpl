@@ -5,6 +5,7 @@ import type MapView from "@arcgis/core/views/MapView";
 import type Viewpoint from "@arcgis/core/Viewpoint";
 import type FeatureLayer from "@arcgis/core/layers/FeatureLayer";
 import { MapaArcGIS } from "./MapaArcGIS";
+import { asset } from "../lib/utils";
 import {
     CAMADAS,
     CAMADA_DADOS,
@@ -209,7 +210,7 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
                 <div className="px-4 md:px-6 h-12 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 md:gap-5 min-w-0">
                         <div className="bg-white rounded shrink-0 px-1.5 py-0.5 flex items-center justify-center">
-                            <img src="/client_luanda1.png" alt="Governo Provincial de Luanda" className="h-6 w-auto object-contain" />
+                            <img src={asset("client_luanda1.png")} alt="Governo Provincial de Luanda" className="h-6 w-auto object-contain" />
                         </div>
 
                         <h1 className="text-white text-xs md:text-sm font-semibold leading-tight truncate">
@@ -220,7 +221,7 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
                             <span className="text-white/70 text-[11px] whitespace-nowrap">Powered By</span>
 
                             <div className="bg-white rounded px-2 py-0.5 flex items-center justify-center">
-                                <img src="/GGPEN_LOGO-scaled.png" alt="GGPEN" className="h-5 w-auto object-contain" />
+                                <img src={asset("GGPEN_LOGO-scaled.png")} alt="GGPEN" className="h-5 w-auto object-contain" />
                             </div>
                         </div>
                     </div>

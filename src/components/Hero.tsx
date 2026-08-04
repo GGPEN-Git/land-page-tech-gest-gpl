@@ -2,6 +2,7 @@ import React from "react";
 import { motion } from "framer-motion";
 import { Button } from "./ui/Button";
 import { ArrowRight, Satellite } from "lucide-react";
+import { asset } from "../lib/utils";
 interface HeroProps {
     onLogin?: () => void;
 }
@@ -10,7 +11,7 @@ export function Hero({ onLogin }: HeroProps) {
         <section className="relative h-screen min-h-[800px] flex items-center overflow-hidden">
             {/* Background Image - Mangrove Forest */}
             <div className="absolute inset-0 z-0">
-                <img src="/Tech-Gest1.png" alt="Angola Mangrove Forest" className="w-full h-full object-cover" />
+                <img src={asset("Tech-Gest1.png")} alt="Angola Mangrove Forest" className="w-full h-full object-cover" />
 
                 {/* Gradient Overlay for readability */}
                 <div className="absolute inset-0 bg-gradient-to- from-[#4d1a1a]/90 via-[#4d1a1a]/60 to-transparent" />
