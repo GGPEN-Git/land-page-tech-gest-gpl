@@ -7,7 +7,9 @@ interface HeroProps {
 }
 export function Hero({ onLogin }: HeroProps) {
     return (
-        <section className="relative h-screen min-h-[800px] flex items-center overflow-hidden">
+        // Coluna com altura exata do ecrã: o conteúdo centra-se no espaço livre
+        // e a barra de números fica sempre dentro da primeira dobra.
+        <section className="relative h-screen min-h-[520px] flex flex-col overflow-hidden">
             {/* Background Image - Mangrove Forest */}
             <div className="absolute inset-0 z-0">
                 <img src={asset("Tech-Gest1.png")} alt="Angola Mangrove Forest" className="w-full h-full object-cover" />
@@ -28,8 +30,10 @@ export function Hero({ onLogin }: HeroProps) {
                 </svg>
             </div>
 
-            <div className="container mx-auto px-4 md:px-6 relative z-10 pt-20">
-                <div className="max-w-3xl">
+            <div className="relative z-10 flex-1 flex items-center min-h-0">
+                <div className="container mx-auto px-4 md:px-6 pt-16 md:pt-20">
+                    {/* Largura sobe por degraus: em ecrãs estreitos o bloco não encosta à margem */}
+                    <div className="max-w-md sm:max-w-lg md:max-w-xl lg:max-w-2xl xl:max-w-3xl">
                     <motion.div
                         initial={{
                             opacity: 0,
@@ -43,22 +47,22 @@ export function Hero({ onLogin }: HeroProps) {
                             duration: 0.8,
                         }}
                     >
-                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/90 text-sm font-medium mb-6">
-                            <Satellite className="w-4 h-4 text-[#c4b03d]" />
+                        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white/90 text-xs md:text-sm font-medium mb-4 md:mb-6">
+                            <Satellite className="w-4 h-4 shrink-0 text-[#c4b03d]" />
                             <span>Inteligência Artificial Aplicada ao Planeamento Urbano e Gestão de Zonas de Risco</span>
                         </div>
 
-                        <h1 className="text-5xl md:text-7xl font-serif font-bold text-white leading-tight mb-6">
+                        <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-serif font-bold text-white leading-tight mb-4 md:mb-6">
                             Bem-vindo ao <br />
                             <span className="text-[#c43d3d]">Tech-Gest: GPL!</span>
                         </h1>
 
-                        <p className="text-lg md:text-xl text-stone-200 mb-8 max-w-2xl leading-relaxed">
+                        <p className="text-sm sm:text-base lg:text-lg xl:text-xl text-stone-200 mb-6 md:mb-8 leading-relaxed">
                             Uma solução inovadora do GGPEN para o Governo Provincial de Luanda, focada na organização da ocupação de espaços
                             e na segurança das nossas comunidades
                         </p>
 
-                        <div className="flex flex-col sm:flex-row gap-4">
+                        <div className="flex flex-col sm:flex-row gap-3 md:gap-4">
                             <Button size="lg" className="group" onClick={onLogin}>
                                 Login
                                 <ArrowRight className="ml-2 w-5 h-5 transition-transform group-hover:translate-x-1" />
@@ -69,32 +73,33 @@ export function Hero({ onLogin }: HeroProps) {
                                 </a>
                             </Button>
                         </div>
-                    </motion.div>
+                        </motion.div>
+                    </div>
                 </div>
             </div>
 
-            {/* Stats ticker at bottom */}
-            <div className="absolute bottom-0 left-0 right-0 border-t border-white/10 bg-black/20 backdrop-blur-sm">
-                <div className="container mx-auto px-4 py-6 flex flex-wrap justify-between items-center gap-8 text-white/90">
+            {/* Barra de números: item flex, não absoluto — assim conta para a altura do ecrã */}
+            <div className="relative z-10 shrink-0 border-t border-white/10 bg-black/20 backdrop-blur-sm">
+                <div className="container mx-auto px-4 py-4 md:py-6 flex flex-wrap justify-between items-center gap-4 md:gap-8 text-white/90">
                     <div className="flex items-center gap-3">
-                        <div className="text-3xl font-serif font-bold text-[#e71313]">2</div>
-                        <div className="text-sm leading-tight">
+                        <div className="text-2xl md:text-3xl font-serif font-bold text-[#e71313]">2</div>
+                        <div className="text-xs md:text-sm leading-tight">
                             Municípios
                             <br />
                             Ingombota e Sambizanga.
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
-                        <div className="text-3xl font-serif font-bold text-[#e71313]">4.300+</div>
-                        <div className="text-sm leading-tight">
+                        <div className="text-2xl md:text-3xl font-serif font-bold text-[#e71313]">4.300+</div>
+                        <div className="text-xs md:text-sm leading-tight">
                             Habitações
                             <br />
                             Estimativa inicial em áreas de intervenção
                         </div>
                     </div>
                     <div className="flex items-center gap-3">
-                        <div className="text-3xl font-serif font-bold text-[#e71313]">36</div>
-                        <div className="text-sm leading-tight">
+                        <div className="text-2xl md:text-3xl font-serif font-bold text-[#e71313]">36</div>
+                        <div className="text-xs md:text-sm leading-tight">
                             Hectares
                             <br />
                             Mapeamento detalhado no Sector Madeira

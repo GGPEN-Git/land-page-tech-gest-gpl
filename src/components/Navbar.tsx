@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Menu, X } from "lucide-react";
 import { Button } from "./ui/Button";
 import { motion, AnimatePresence } from "framer-motion";
+import { asset } from "../lib/utils";
 export function Navbar() {
     const [isScrolled, setIsScrolled] = useState(false);
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -19,7 +20,7 @@ export function Navbar() {
             <div className="container mx-auto px-4 md:px-6 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <div className="bg-[#fff] px-1 py-0.5 rounded-lg">
-                        <img width={40} height={20} src={"/client_luanda1.png"} alt="Forest texture" className="" />
+                        <img width={40} height={20} src={asset("client_luanda1.png")} alt="Governo Provincial de Luanda" />
                     </div>
                     <span className={`font-serif font-bold text-md tracking-tight ${isScrolled ? "text-[#c43d3d]" : "text-white"}`}>
                         Tech-Gest: <span className="text-[#c43d3d]">GPL</span>
@@ -27,7 +28,7 @@ export function Navbar() {
                     </span>
 
                     <div className="bg-[#fff] px-1 py-0.5 rounded-lg">
-                        <img width={42} height={22} src={"/GGPEN_LOGO-scaled.png"} alt="Forest texture" className="" />
+                        <img width={42} height={22} src={asset("GGPEN_LOGO-scaled.png")} alt="GGPEN" />
                     </div>
                 </div>
 
