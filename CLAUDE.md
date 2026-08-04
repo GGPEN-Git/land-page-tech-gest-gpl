@@ -107,9 +107,16 @@ Por isso o cartão sempre à vista mostra **Validação** — é a legenda do qu
 
 Os assets do SDK (ícones, fontes) vêm do CDN via `esriConfig.assetsPath`. **Se atualizar `@arcgis/core`, atualize também `ARCGIS_VERSION`** — as duas versões têm de coincidir.
 
-## Filtros
+## Áreas e filtros
 
-Estado em `Dashboard`: `selecoes` é `Record<campo, valor>`. `construirWhere(selecoes)` gera o SQL; `construirWhere(selecoes, campo)` ignora um campo para listar as suas próprias opções sem se auto-filtrar (filtros em cascata).
+**A ÁREA não é um filtro como os outros.** As três áreas não vivem no mesmo sítio: `Boavista` e `Porto Seco da Mulemba` são valores do campo `AOI` dentro de `CAMADA_DADOS`; `Sambizanga` é uma **camada à parte**, cujo `AOI` está vazio. O mapeamento vive em `AREAS` (`lib/arcgis.ts`), e escolher uma área pode trocar a camada ativa — daí estar fora de `FILTROS`.
+
+Consequências no `Dashboard`:
+- `camadaAtivaId` decide qual camada é consultada e qual fica visível; as outras camadas de edifícios são ocultadas e têm o `definitionExpression` limpo.
+- Mudar de área **limpa as restantes seleções** — os bairros de uma área não existem na outra.
+- O cartão principal segue `campoSimbologia` da camada ativa: `Validacao` na de Boavista & Porto Seco, `Estado` na de Sambizanga. Sambizanga **não tem** o campo `Validacao`, por isso essas contagens são saltadas e o bloco "Estado" da aba desaparece (passaria a duplicar o cartão).
+
+Restantes filtros: `selecoes` é `Record<campo, valor>`. `construirWhere(selecoes)` gera o SQL; `construirWhere(selecoes, campo)` ignora um campo para listar as suas próprias opções sem se auto-filtrar (filtros em cascata).
 
 O mesmo `where` alimenta três coisas: `camada.definitionExpression` (filtra o mapa), as contagens por `Estado` (cartão à direita) e as contagens por `Validacao` (aba lateral). Valores vão para SQL — passar sempre por `escaparSql`, e juntar condições com `comCondicao` para não deixar `1=1` pendurado.
 

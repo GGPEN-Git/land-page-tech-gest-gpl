@@ -11,12 +11,21 @@ export const WEBMAP_ID = "56676e3af62748e29429492cafb1ed23";
 
 const BASE = "https://services-eu1.arcgis.com/7r9gTPdSG9MPi1LZ/arcgis/rest/services";
 
+export const CAMPO_ESTADO = "Estado";
+export const CAMPO_VALIDACAO = "Validacao";
+export const CAMPO_AOI = "AOI";
+
 export interface CamadaConfig {
     id: string;
     titulo: string;
     url: string;
     /** Visibilidade inicial no mapa. Omitido = visível. */
     visivelPorOmissao?: boolean;
+    /**
+     * Campo pelo qual o renderer do webmap colore esta camada.
+     * Só as camadas de edifícios o têm; os contornos ficam sem.
+     */
+    campoSimbologia?: typeof CAMPO_VALIDACAO | typeof CAMPO_ESTADO;
 }
 
 /**
@@ -28,24 +37,50 @@ export const CAMADA_DADOS: CamadaConfig = {
     id: "residencias-em-risco",
     titulo: "Edifícios — Boavista & Porto Seco",
     url: `${BASE}/RESIDENCIAS_EM_RISCO/FeatureServer/0`,
+    campoSimbologia: CAMPO_VALIDACAO,
 };
 
-/** Restantes camadas do webmap: outro conjunto de edifícios e os contornos das áreas. */
-export const CAMADAS_EXTRA: CamadaConfig[] = [
-    {
-        id: "edificios-sambizanga",
-        titulo: "Edifícios — Sambizanga",
-        url: `${BASE}/Residencias_em_Risco_Sambizanga/FeatureServer/0`,
-        // Oculta à partida: não entra nas contagens nem reage aos filtros, e como
-        // tem Estado = 0 em todos os registos aparece como uma mancha vermelha
-        // que a legenda não explica.
-        visivelPorOmissao: false,
-    },
+/** Segundo levantamento. Não tem o campo Validacao; o renderer usa Estado. */
+export const CAMADA_SAMBIZANGA: CamadaConfig = {
+    id: "edificios-sambizanga",
+    titulo: "Edifícios — Sambizanga",
+    url: `${BASE}/Residencias_em_Risco_Sambizanga/FeatureServer/0`,
+    visivelPorOmissao: false,
+    campoSimbologia: CAMPO_ESTADO,
+};
+
+/** Contornos de área, 1 polígono cada. Enquadramento, não dados. */
+export const CAMADAS_LIMITE: CamadaConfig[] = [
     { id: "boavista", titulo: "Boavista", url: `${BASE}/Boavista/FeatureServer/0` },
     { id: "porto-seco-mulemba", titulo: "Porto Seco da Mulemba", url: `${BASE}/Porto_Seco_Mulemba/FeatureServer/0` },
 ];
 
-export const CAMADAS: CamadaConfig[] = [CAMADA_DADOS, ...CAMADAS_EXTRA];
+export const CAMADAS: CamadaConfig[] = [CAMADA_DADOS, CAMADA_SAMBIZANGA, ...CAMADAS_LIMITE];
+
+/** Camadas de edifícios — só uma fica visível de cada vez, conforme a área escolhida. */
+export const CAMADAS_EDIFICIOS: CamadaConfig[] = [CAMADA_DADOS, CAMADA_SAMBIZANGA];
+
+export interface AreaConfig {
+    id: string;
+    label: string;
+    /** Camada a mostrar e a consultar quando esta área está escolhida. */
+    camadaId: string;
+    /** Valor de AOI a filtrar dentro dessa camada. Ausente = a camada inteira. */
+    aoi?: string;
+}
+
+/**
+ * As áreas não vivem todas no mesmo sítio: Boavista e Porto Seco são valores
+ * do campo AOI numa camada; Sambizanga é uma camada à parte, cujo AOI está vazio.
+ * Este mapeamento esconde essa diferença da interface.
+ */
+export const AREAS: AreaConfig[] = [
+    { id: "boavista", label: "Boavista", camadaId: CAMADA_DADOS.id, aoi: "Boavista" },
+    { id: "sambizanga", label: "Sambizanga", camadaId: CAMADA_SAMBIZANGA.id },
+    // Porto Seco da Mulemba existe no campo AOI e continua a ser desenhado no mapa,
+    // mas foi retirado da lista de áreas a pedido. Para o repor, basta descomentar:
+    // { id: "porto-seco", label: "Porto Seco da Mulemba", camadaId: CAMADA_DADOS.id, aoi: "Porto Seco da Mulemba" },
+];
 
 export interface FiltroConfig {
     id: string;
@@ -53,17 +88,17 @@ export interface FiltroConfig {
     campo: string;
 }
 
-/** Filtros da aba lateral, por ordem de apresentação. */
+/**
+ * Filtros da aba lateral, por ordem de apresentação.
+ * A ÁREA não está aqui: é escolhida à parte, por `AREAS`, porque pode implicar
+ * trocar de camada e não apenas filtrar um campo.
+ */
 export const FILTROS: FiltroConfig[] = [
-    { id: "aoi", label: "ÁREA", campo: "AOI" },
     { id: "bairro", label: "BAIRRO", campo: "Bairro" },
     { id: "tipologia", label: "TIPOLOGIA", campo: "Tipologia" },
     { id: "construcao", label: "TIPO DE CONSTRUÇÃO", campo: "T_Constru" },
     { id: "afetacao", label: "AFETAÇÃO", campo: "Afetacao" },
 ];
-
-export const CAMPO_ESTADO = "Estado";
-export const CAMPO_VALIDACAO = "Validacao";
 
 export interface ContagemConfig {
     valor: number;

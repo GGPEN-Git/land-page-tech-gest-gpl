@@ -7,8 +7,11 @@ import type FeatureLayer from "@arcgis/core/layers/FeatureLayer";
 import { MapaArcGIS } from "./MapaArcGIS";
 import { asset } from "../lib/utils";
 import {
+    AREAS,
     CAMADAS,
+    CAMADAS_EDIFICIOS,
     CAMADA_DADOS,
+    CAMPO_AOI,
     CAMPO_ESTADO,
     CAMPO_VALIDACAO,
     ESTADOS,
@@ -19,7 +22,7 @@ import {
     formatarNumero,
 } from "../lib/arcgis";
 
-/** Largura da aba lateral em px — usada também para deslocar os controlos do mapa. */
+/** Largura da aba lateral em px. */
 const LARGURA_ABA = 320;
 
 interface DashboardProps {
@@ -31,28 +34,34 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
     const [abaAberta, setAbaAberta] = useState(true);
     const [filtroAberto, setFiltroAberto] = useState<string | null>(null);
 
-    /** Seleção atual por campo (ex.: { Bairro: "Sambizanga" }). */
+    /** Área escolhida — decide a camada ativa e, quando aplicável, o valor de AOI. */
+    const [areaId, setAreaId] = useState<string | null>(null);
+    /** Seleção dos restantes filtros (campo → valor). */
     const [selecoes, setSelecoes] = useState<Record<string, string>>({});
-    /** Opções disponíveis por campo, vindas do serviço. */
+
     const [opcoes, setOpcoes] = useState<Record<string, string[]>>({});
-    /** Contagem por valor de Estado. */
     const [contagens, setContagens] = useState<Record<number, number>>({});
-    /** Contagem por valor de Validacao. */
     const [validacoes, setValidacoes] = useState<Record<number, number>>({});
 
     const [camadas, setCamadas] = useState<Record<string, FeatureLayer>>({});
-    const [visiveis, setVisiveis] = useState<Record<string, boolean>>(() =>
-        Object.fromEntries(CAMADAS.map((c) => [c.id, c.visivelPorOmissao !== false])),
-    );
     const [aConsultar, setAConsultar] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
 
-    const camada = camadas[CAMADA_DADOS.id] || null;
-
     const viewRef = useRef<MapView | null>(null);
     const viewpointInicialRef = useRef<Viewpoint | null>(null);
-    /** Evita reposicionar a câmara na primeira consulta, sem filtros escolhidos. */
     const primeiraConsultaRef = useRef(true);
+
+    const area = AREAS.find((a) => a.id === areaId) || null;
+    const camadaAtivaId = area?.camadaId || CAMADA_DADOS.id;
+    const camada = camadas[camadaAtivaId] || null;
+
+    const configAtiva = CAMADAS_EDIFICIOS.find((c) => c.id === camadaAtivaId) || CAMADA_DADOS;
+    const mostraValidacao = configAtiva.campoSimbologia === CAMPO_VALIDACAO;
+
+    // O cartão principal segue a simbologia do mapa; o bloco da aba mostra o outro,
+    // quando a camada ativa o tiver.
+    const principais = mostraValidacao ? VALIDACOES : ESTADOS;
+    const contagensPrincipais = mostraValidacao ? validacoes : contagens;
 
     const handleViewReady = useCallback((view: MapView) => {
         viewRef.current = view;
@@ -63,29 +72,46 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
         setCamadas(encontradas);
     }, []);
 
-    // Reflete no mapa a visibilidade escolhida na aba.
+    // Só a camada de edifícios da área escolhida fica visível; os contornos ficam sempre.
     useEffect(() => {
         for (const [id, featureLayer] of Object.entries(camadas)) {
-            featureLayer.visible = visiveis[id] !== false;
-        }
-    }, [camadas, visiveis]);
+            const config = CAMADAS.find((c) => c.id === id);
+            if (!config) continue;
 
-    // Aplica o filtro ao mapa e recarrega opções e contagens sempre que a seleção muda.
+            if (!config.campoSimbologia) {
+                featureLayer.visible = true;
+                continue;
+            }
+
+            const ativa = id === camadaAtivaId;
+            featureLayer.visible = ativa;
+
+            // Limpa o filtro das camadas que deixaram de estar ativas.
+            if (!ativa) featureLayer.definitionExpression = "";
+        }
+    }, [camadas, camadaAtivaId]);
+
+    // Trocar de área invalida as escolhas anteriores: os bairros de uma não existem na outra.
+    useEffect(() => {
+        setSelecoes({});
+        setFiltroAberto(null);
+    }, [areaId]);
+
     useEffect(() => {
         if (!camada) return;
 
         let cancelado = false;
-        const where = construirWhere(selecoes);
+
+        const efetivas = area?.aoi ? { ...selecoes, [CAMPO_AOI]: area.aoi } : selecoes;
+        const where = construirWhere(efetivas);
 
         camada.definitionExpression = where;
         setAConsultar(true);
 
-        /** Leva a câmara até ao que ficou selecionado; sem filtros, volta à vista inicial. */
         async function enquadrar(layer: FeatureLayer, clausula: string) {
             const view = viewRef.current;
             if (!view) return;
 
-            // Na primeira consulta ainda não houve escolha nenhuma — deixa a vista do webmap.
             if (primeiraConsultaRef.current) {
                 primeiraConsultaRef.current = false;
                 return;
@@ -102,21 +128,18 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
 
                 if (cancelado || count === 0 || !extent) return;
 
-                // Uma margem à volta, para o polígono não ficar colado às bordas.
                 await view.goTo(extent.expand(1.3));
             } catch (e) {
-                // Animação interrompida ou extensão inválida — não é motivo para falhar a consulta.
                 console.debug("Não foi possível enquadrar a seleção:", e);
             }
         }
 
         async function carregar(layer: FeatureLayer) {
             try {
-                // Opções de cada filtro, já restringidas pelos outros filtros ativos.
                 const listas = await Promise.all(
                     FILTROS.map(async (filtro) => {
                         const resultado = await layer.queryFeatures({
-                            where: construirWhere(selecoes, filtro.campo),
+                            where: construirWhere(efetivas, filtro.campo),
                             outFields: [filtro.campo],
                             returnDistinctValues: true,
                             returnGeometry: false,
@@ -131,14 +154,17 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
                     }),
                 );
 
-                // Contagens por Estado e por Validacao, respeitando o filtro atual.
                 const contarPor = (campo: string, valor: number) =>
                     layer.queryFeatureCount({ where: comCondicao(where, `${campo} = ${valor}`) });
 
-                const [totaisEstado, totaisValidacao] = await Promise.all([
-                    Promise.all(ESTADOS.map(async (e) => [e.valor, await contarPor(CAMPO_ESTADO, e.valor)] as const)),
-                    Promise.all(VALIDACOES.map(async (v) => [v.valor, await contarPor(CAMPO_VALIDACAO, v.valor)] as const)),
-                ]);
+                const totaisEstado = await Promise.all(
+                    ESTADOS.map(async (e) => [e.valor, await contarPor(CAMPO_ESTADO, e.valor)] as const),
+                );
+
+                // A camada de Sambizanga não tem o campo Validacao — pedi-lo daria erro.
+                const totaisValidacao = mostraValidacao
+                    ? await Promise.all(VALIDACOES.map(async (v) => [v.valor, await contarPor(CAMPO_VALIDACAO, v.valor)] as const))
+                    : [];
 
                 if (cancelado) return;
 
@@ -163,7 +189,7 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
         return () => {
             cancelado = true;
         };
-    }, [camada, selecoes]);
+    }, [camada, area, selecoes, mostraValidacao]);
 
     function selecionar(campo: string, valor: string | null) {
         setSelecoes((atual) => {
@@ -177,6 +203,7 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
     }
 
     function reporFiltros() {
+        setAreaId(null);
         setSelecoes({});
         setFiltroAberto(null);
     }
@@ -200,10 +227,10 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
         });
     }
 
-    const filtrosAtivos = Object.keys(selecoes).length;
+    const filtrosAtivos = Object.keys(selecoes).length + (areaId ? 1 : 0);
+    const areaAberta = filtroAberto === "area";
 
     return (
-        // h-screen + overflow-hidden: o ecrã é a moldura; só a aba faz scroll por dentro.
         <div className="h-screen overflow-hidden flex flex-col bg-black font-sans">
             {/* Barra superior */}
             <header className="relative z-30 shrink-0 bg-black border-b border-[#1e6fd9]">
@@ -242,10 +269,7 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
                 </div>
             </header>
 
-            {/* Área de trabalho: a aba ocupa espaço próprio, o mapa fica com o resto */}
-            {/* min-h-0 é obrigatório: sem ele o item flex recusa encolher abaixo do conteúdo */}
             <main className="relative flex-1 min-h-0 flex overflow-hidden">
-                {/* Aba lateral — filtros e contagens por estado */}
                 <motion.aside
                     initial={false}
                     animate={{ width: abaAberta ? LARGURA_ABA : 0 }}
@@ -253,9 +277,52 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
                     className="relative z-20 shrink-0 min-h-0 bg-[#0b1c38] shadow-2xl overflow-hidden"
                     aria-hidden={!abaAberta}
                 >
-                    {/* Largura fixa para o conteúdo não encolher durante a animação */}
                     <div className="h-full overflow-y-auto px-6 py-6" style={{ width: LARGURA_ABA }}>
                         <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mb-3">Filtros</h2>
+
+                        {/* ÁREA — pode trocar de camada, por isso não passa pelo ciclo dos outros filtros */}
+                        <div className="border-b border-white/10">
+                            <button
+                                type="button"
+                                onClick={() => setFiltroAberto(areaAberta ? null : "area")}
+                                aria-expanded={areaAberta}
+                                className="w-full flex items-center justify-between gap-3 py-3 text-white text-sm hover:text-[#7fb3e0] transition-colors"
+                            >
+                                <span className="text-left">ÁREA</span>
+
+                                <span className="flex items-center gap-2 shrink-0">
+                                    {area && <span className="max-w-[100px] truncate text-xs text-[#7fb3e0]">{area.label}</span>}
+                                    <ChevronDown className={`w-4 h-4 transition-transform ${areaAberta ? "rotate-180" : ""}`} />
+                                </span>
+                            </button>
+
+                            {areaAberta && (
+                                <div className="pb-3 space-y-1">
+                                    <button
+                                        type="button"
+                                        onClick={() => setAreaId(null)}
+                                        className={`w-full text-left px-3 py-1.5 rounded text-xs transition-colors ${
+                                            areaId ? "text-white/60 hover:bg-white/10" : "bg-[#1e6fd9] text-white"
+                                        }`}
+                                    >
+                                        Todas
+                                    </button>
+
+                                    {AREAS.map((opcao) => (
+                                        <button
+                                            key={opcao.id}
+                                            type="button"
+                                            onClick={() => setAreaId(opcao.id)}
+                                            className={`w-full text-left px-3 py-1.5 rounded text-xs transition-colors ${
+                                                areaId === opcao.id ? "bg-[#1e6fd9] text-white" : "text-white/80 hover:bg-white/10"
+                                            }`}
+                                        >
+                                            {opcao.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
 
                         {FILTROS.map((filtro) => {
                             const aberto = filtroAberto === filtro.id;
@@ -306,7 +373,7 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
                                             ))}
 
                                             {lista.length === 0 && !aConsultar && (
-                                                <p className="px-3 py-1.5 text-xs text-white/40">Sem valores para este filtro.</p>
+                                                <p className="px-3 py-1.5 text-xs text-white/40">Sem valores para esta área.</p>
                                             )}
                                         </div>
                                     )}
@@ -324,66 +391,46 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
                             Repor filtros
                         </button>
 
-                        <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mt-8 mb-3">Estado</h2>
+                        {/* Só faz sentido quando o cartão principal mostra validação. */}
+                        {mostraValidacao && (
+                            <>
+                                <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mt-8 mb-3">Estado</h2>
 
-                        <div className="space-y-2">
-                            {ESTADOS.map((item) => (
-                                <div key={item.valor} className="flex items-center gap-3">
-                                    <span className="w-4 h-4 rounded shrink-0" style={{ backgroundColor: item.cor }} aria-hidden="true" />
+                                <div className="space-y-2">
+                                    {ESTADOS.map((item) => (
+                                        <div key={item.valor} className="flex items-center gap-3">
+                                            <span
+                                                className="w-4 h-4 rounded shrink-0"
+                                                style={{ backgroundColor: item.cor }}
+                                                aria-hidden="true"
+                                            />
 
-                                    <span className="text-white text-sm flex-1">{item.label}</span>
+                                            <span className="text-white text-sm flex-1">{item.label}</span>
 
-                                    <span className="bg-[#0e2242] rounded-md px-3 py-1 min-w-[70px] text-center text-white text-base font-bold">
-                                        {contagens[item.valor] === undefined ? "—" : formatarNumero(contagens[item.valor])}
-                                    </span>
+                                            <span className="bg-[#0e2242] rounded-md px-3 py-1 min-w-[70px] text-center text-white text-base font-bold">
+                                                {contagens[item.valor] === undefined ? "—" : formatarNumero(contagens[item.valor])}
+                                            </span>
+                                        </div>
+                                    ))}
                                 </div>
-                            ))}
-                        </div>
 
-                        <p className="mt-2 text-[11px] text-white/40 leading-snug">
-                            O mapa colore os edifícios por validação, não por estado.
+                                <p className="mt-2 text-[11px] text-white/40 leading-snug">
+                                    O mapa colore os edifícios por validação, não por estado.
+                                </p>
+                            </>
+                        )}
+
+                        <p className="mt-8 text-[11px] text-white/40 leading-snug">
+                            Camada em uso: {configAtiva.titulo}
                         </p>
 
-                        <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mt-8 mb-3">Camadas</h2>
-
-                        <div className="space-y-1">
-                            {CAMADAS.map((config) => {
-                                const ativa = visiveis[config.id] !== false;
-                                const contaParaIndicadores = config.id === CAMADA_DADOS.id;
-
-                                return (
-                                    <label
-                                        key={config.id}
-                                        className="flex items-start gap-3 py-1.5 text-sm text-white/80 hover:text-white cursor-pointer"
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            checked={ativa}
-                                            onChange={() => setVisiveis((atual) => ({ ...atual, [config.id]: !ativa }))}
-                                            className="mt-0.5 accent-[#1e6fd9]"
-                                        />
-
-                                        <span className="flex-1 leading-snug">
-                                            {config.titulo}
-
-                                            {!contaParaIndicadores && (
-                                                <span className="block text-[11px] text-white/40">Fora dos filtros e das contagens</span>
-                                            )}
-                                        </span>
-                                    </label>
-                                );
-                            })}
-                        </div>
-
-                        {erro && <p className="mt-6 text-xs text-[#e08a8a]">{erro}</p>}
+                        {erro && <p className="mt-4 text-xs text-[#e08a8a]">{erro}</p>}
                     </div>
                 </motion.aside>
 
-                {/* Mapa — ocupa o espaço que sobra */}
                 <div className="relative flex-1">
                     <MapaArcGIS className="absolute inset-0 z-0" onViewReady={handleViewReady} onCamadas={handleCamadas} />
 
-                    {/* Puxador — sobre a borda do mapa, para não ocupar uma coluna própria */}
                     <button
                         type="button"
                         onClick={() => setAbaAberta(!abaAberta)}
@@ -401,7 +448,6 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
                         )}
                     </button>
 
-                    {/* Controlos do mapa */}
                     <div className="absolute top-6 left-6 z-10 flex flex-col gap-3">
                         <div className="flex flex-col bg-white rounded shadow-lg overflow-hidden">
                             <button
@@ -435,23 +481,24 @@ export function Dashboard({ utilizador = "Utilizador", onLogout }: DashboardProp
                         </button>
                     </div>
 
-                    {/* Legenda sempre à vista — fica sobre o mapa por ser a legenda do que está desenhado */}
+                    {/* Legenda do que está desenhado no mapa */}
                     <div className="absolute bottom-10 right-6 z-10 w-[270px] max-w-[calc(100%-3rem)] bg-[#0b1c38]/95 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden">
                         <div className="bg-[#12294d] px-5 py-4">
-                            <p className="text-white/70 text-sm truncate">{selecoes.AOI || "Todas as áreas"}</p>
+                            <p className="text-white/70 text-sm truncate">{area?.label || "Todas as áreas"}</p>
                             <p className="text-white text-2xl font-bold tracking-wide">LUANDA</p>
                         </div>
 
-                        {/* Validação, porque é por este campo que o mapa está simbolizado. */}
                         <div className="px-5 py-4 space-y-2">
-                            {VALIDACOES.map((item) => (
+                            {principais.map((item) => (
                                 <div key={item.valor} className="flex items-center gap-3">
                                     <span className="w-4 h-4 rounded shrink-0" style={{ backgroundColor: item.cor }} aria-hidden="true" />
 
                                     <span className="text-white text-sm flex-1">{item.label}</span>
 
                                     <span className="bg-[#0e2242] rounded-md px-3 py-1 min-w-[70px] text-center text-white text-base font-bold">
-                                        {validacoes[item.valor] === undefined ? "—" : formatarNumero(validacoes[item.valor])}
+                                        {contagensPrincipais[item.valor] === undefined
+                                            ? "—"
+                                            : formatarNumero(contagensPrincipais[item.valor])}
                                     </span>
                                 </div>
                             ))}
