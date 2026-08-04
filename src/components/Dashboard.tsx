@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ChevronDown, ChevronLeft, ChevronRight, Home, Minus, Plus, RotateCcw, User } from "lucide-react";
 import type MapView from "@arcgis/core/views/MapView";

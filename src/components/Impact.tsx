@@ -1,6 +1,4 @@
-import React from "react";
 import { motion } from "framer-motion";
-import { MapPin } from "lucide-react";
 import { asset } from "../lib/utils";
 export function Impact() {
     return (

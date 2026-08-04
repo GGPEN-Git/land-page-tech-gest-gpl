@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { Menu, X, Leaf } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Menu, X } from "lucide-react";
 import { Button } from "./ui/Button";
 import { motion, AnimatePresence } from "framer-motion";
 export function Navbar() {

@@ -128,6 +128,9 @@ Não existe autenticação real. `Login.handleSubmit` só verifica se os campos 
 - **Named exports**, nunca `export default`: `export function Hero() {}`. Ficheiro em `PascalCase.tsx` com o mesmo nome do componente.
 - Props tipadas com `interface XProps`, estendendo o tipo HTML nativo quando aplicável (ver `ui/Button.tsx`).
 - Imports relativos (`../lib/utils`) — não há alias `@/` configurado.
+- **Não importar `React` só por importar.** O `jsx: react-jsx` dispensa-o, e `noUnusedLocals` no `tsconfig.json` transforma isso em erro de compilação. Importar apenas quando se usa `React.ReactNode`, `React.FormEvent`, etc.
+- Componentes que envolvem `motion.*` devem estender `HTMLMotionProps<"tag">`, nunca os atributos nativos do React — o framer-motion redefine `onDrag` e `onAnimationStart` de forma incompatível.
+- `npm run build` **não** valida tipos. Correr `npx tsc --noEmit` antes de fazer push; é o que o Render executa e o que faz o deploy falhar.
 - Cada secção é uma `<section>` com `container mx-auto px-4 md:px-6` por dentro.
 - Espaçamento vertical típico das secções: `py-20`.
 - Mobile-first: base sem prefixo, depois `md:` / `sm:`.

@@ -1,4 +1,3 @@
-import React from "react";
 import { motion } from "framer-motion";
 import { Satellite, GalleryHorizontal, ChartColumn } from "lucide-react";
 export function HowItWorks() {

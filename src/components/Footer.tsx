@@ -1,5 +1,4 @@
-import React from "react";
-import { Leaf, Mail, Phone, MapPin } from "lucide-react";
+import { MapPin } from "lucide-react";
 export function Footer() {
     return (
         <footer className="bg-[#1a1a1a] text-white pt-20 pb-10">

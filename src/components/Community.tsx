@@ -1,6 +1,4 @@
-import React from "react";
 import { motion } from "framer-motion";
-import { Quote } from "lucide-react";
 export function Community() {
     return (
         <section id="community" className="py-20 bg-white">
