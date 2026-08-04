@@ -12,6 +12,14 @@ dist
 dist-ssr
 *.local
 
+# Segredos — nunca commitar. Ver .env.example.
+.env
+.env.*
+!.env.example
+
+# Volume do Postgres local
+dados-postgres/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

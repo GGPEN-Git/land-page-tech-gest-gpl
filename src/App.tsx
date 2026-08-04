@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Navbar } from "./components/Navbar";
 import { Hero } from "./components/Hero";
 import { Mission } from "./components/Mission";
@@ -10,16 +10,39 @@ import { Login } from "./components/Login";
 import { Dashboard } from "./components/Dashboard";
 import { Button } from "./components/ui/Button";
 import { asset } from "./lib/utils";
+import { sessaoAtual, terminarSessao, type Utilizador } from "./lib/api";
 export function App() {
     const [view, setView] = useState<"landing" | "login" | "dashboard">("landing");
-    const [utilizador, setUtilizador] = useState("");
+    const [utilizador, setUtilizador] = useState<Utilizador | null>(null);
+
+    // Sessão em cookie: ao recarregar a página perguntamos ao servidor se ainda é válida.
+    useEffect(() => {
+        sessaoAtual()
+            .then(({ utilizador: atual }) => setUtilizador(atual))
+            .catch(() => setUtilizador(null));
+    }, []);
+
+    function irParaAcesso() {
+        setView(utilizador ? "dashboard" : "login");
+    }
+
+    async function sair() {
+        try {
+            await terminarSessao();
+        } catch {
+            // Sessão já caducada do lado do servidor — o efeito local é o mesmo.
+        }
+
+        setUtilizador(null);
+        setView("landing");
+    }
 
     if (view === "login") {
         return (
             <Login
                 onBack={() => setView("landing")}
-                onSuccess={(email) => {
-                    setUtilizador(email);
+                onSuccess={(autenticado) => {
+                    setUtilizador(autenticado);
                     setView("dashboard");
                 }}
             />
@@ -27,15 +50,7 @@ export function App() {
     }
 
     if (view === "dashboard") {
-        return (
-            <Dashboard
-                utilizador={utilizador}
-                onLogout={() => {
-                    setUtilizador("");
-                    setView("landing");
-                }}
-            />
-        );
+        return <Dashboard utilizador={utilizador} onLogout={sair} />;
     }
 
     return (
@@ -43,7 +58,7 @@ export function App() {
             <Navbar />
 
             <main>
-                <Hero onLogin={() => setView("login")} />
+                <Hero onLogin={irParaAcesso} />
                 <Mission />
                 <HowItWorks />
                 <Impact />
@@ -60,7 +75,7 @@ export function App() {
                             Join our network of conservationists, researchers, and community leaders working to protect Angola's coastline.
                         </p> */}
                         <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                            <Button size="lg" variant="primary" onClick={() => setView("login")}>
+                            <Button size="lg" variant="primary" onClick={irParaAcesso}>
                                 Aceder a Plataforma
                             </Button>
                             {/* <Button size="lg" variant="outline" className="border-white text-white hover:bg-white/10">

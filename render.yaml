@@ -5,8 +5,9 @@ services:
     region: frankfurt
 
     # --include=dev é obrigatório: o Render define NODE_ENV=production, e sem esta
-    # flag o npm salta as devDependencies — ficaria sem vite nem typescript e o build falhava.
-    buildCommand: npm ci --include=dev && npx tsc --noEmit && npm run build
+    # flag o npm salta as devDependencies — ficaria sem vite nem typescript.
+    # A migração corre aqui: é idempotente, pode repetir-se em cada deploy.
+    buildCommand: npm ci --include=dev && npx tsc --noEmit && npm run build && npm run db:migrar
     startCommand: node server.js
 
     healthCheckPath: /healthz
@@ -14,3 +15,12 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20"
+      # Explícito e não herdado: decide o TLS do Postgres e a flag secure do cookie.
+      - key: NODE_ENV
+        value: production
+      # sync: false = definida no painel do Render, nunca neste ficheiro.
+      # É a connection string do Supabase e contém a senha da base de dados.
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSAO_DIAS
+        value: "7"

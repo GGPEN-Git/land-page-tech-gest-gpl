@@ -9,7 +9,11 @@
         "build": "npx vite build",
         "lint": "eslint . --ext .js,.jsx,.ts,.tsx",
         "preview": "npx vite preview",
-        "start": "node server.js"
+        "start": "node server.js",
+        "dev:api": "node --env-file=.env --watch server.js",
+        "db:migrar": "node --env-file-if-exists=.env scripts/migrar.js",
+        "db:utilizador": "node --env-file-if-exists=.env scripts/criar-utilizador.js",
+        "db:semear": "node --env-file-if-exists=.env scripts/semear.js"
     },
     "dependencies": {
         "@arcgis/core": "4.31",

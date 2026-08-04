@@ -2,30 +2,39 @@ import React, { useState } from "react";
 import { motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import { asset } from "../lib/utils";
+import { iniciarSessao, type Utilizador } from "../lib/api";
 
 interface LoginProps {
     onBack?: () => void;
-    onSuccess?: (email: string) => void;
+    onSuccess?: (utilizador: Utilizador) => void;
 }
 
 export function Login({ onBack, onSuccess }: LoginProps) {
     const [email, setEmail] = useState("");
     const [password, setPassword] = useState("");
     const [notice, setNotice] = useState<string | null>(null);
+    const [aEnviar, setAEnviar] = useState(false);
 
-    function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
         e.preventDefault();
 
-        if (!email.trim() || !password.trim()) {
+        if (!email.trim() || !password) {
             setNotice("Preencha o email e a palavra-passe.");
             return;
         }
 
         setNotice(null);
+        setAEnviar(true);
 
-        // TODO: validar credenciais no backend antes de dar acesso.
-        // Por agora qualquer email/palavra-passe preenchidos entram.
-        onSuccess?.(email.trim());
+        try {
+            const { utilizador } = await iniciarSessao(email.trim(), password);
+            onSuccess?.(utilizador);
+        } catch (erro) {
+            setNotice(erro instanceof Error ? erro.message : "Não foi possível iniciar sessão.");
+            setPassword("");
+        } finally {
+            setAEnviar(false);
+        }
     }
 
     return (
@@ -112,11 +121,12 @@ export function Login({ onBack, onSuccess }: LoginProps) {
 
                             <motion.button
                                 type="submit"
-                                whileHover={{ scale: 1.01 }}
-                                whileTap={{ scale: 0.99 }}
-                                className="w-full bg-white text-stone-900 rounded-md py-4 font-bold text-sm tracking-[0.2em] uppercase hover:bg-stone-100 transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-black"
+                                disabled={aEnviar}
+                                whileHover={aEnviar ? undefined : { scale: 1.01 }}
+                                whileTap={aEnviar ? undefined : { scale: 0.99 }}
+                                className="w-full bg-white text-stone-900 rounded-md py-4 font-bold text-sm tracking-[0.2em] uppercase hover:bg-stone-100 transition-colors focus:outline-none focus:ring-2 focus:ring-white focus:ring-offset-2 focus:ring-offset-black disabled:opacity-60 disabled:cursor-wait"
                             >
-                                Entrar
+                                {aEnviar ? "A entrar…" : "Entrar"}
                             </motion.button>
 
                             {notice && (

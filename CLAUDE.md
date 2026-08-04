@@ -128,9 +128,47 @@ O `<main>` é um flex row: aba lateral (largura animada de 0 a `LARGURA_ABA`), p
 
 O único elemento por cima do mapa é a legenda de validação, no canto inferior direito, e é intencional: é a legenda do que está desenhado.
 
-## Estado sem backend
+## Autenticação
 
-Não existe autenticação real. `Login.handleSubmit` só verifica se os campos estão preenchidos e chama `onSuccess`. Os dados do mapa e dos indicadores, esses, são reais.
+Real, contra Postgres. Não há registo aberto: a primeira conta nasce por linha de comando, as seguintes são criadas por um administrador dentro da aplicação.
+
+```
+docker compose up -d       # Postgres local na 5433 (ou aponte a DATABASE_URL ao Supabase)
+npm run db:migrar          # aplica db/schema.sql
+npm run db:semear          # cria admin + utilizador, imprime as senhas UMA vez
+npm run dev:api            # Express na 3000
+npm run dev                # Vite na 5173, com proxy /api → 3000
+```
+
+O TLS da ligação é decidido pelo **destino** e não pelo `NODE_ENV` (`precisaDeTls` em `server/db.js`): assim funciona contra o Supabase a partir da máquina local e fica desligado no Docker.
+
+### Papéis
+
+`utilizadores.papel` é `admin` ou `utilizador`. Só `admin` acede a `/api/utilizadores` (listar, criar, ativar/desativar, promover).
+
+O botão de gestão no `Dashboard` aparece conforme o papel, mas isso é **conveniência, não segurança** — quem decide é o `exigirAdmin` no servidor, que lê o papel da base de dados a cada pedido.
+
+Um admin não se pode desativar nem despromover a si próprio; sem isso seria possível ficar sem nenhum administrador.
+
+Alterar palavra-passe, papel ou desativar **apaga as sessões abertas** desse utilizador. Sem isso, quem já estivesse autenticado mantinha o acesso antigo.
+
+| Ficheiro | Papel |
+|---|---|
+| `db/schema.sql` | Tabelas `utilizadores` e `sessoes`. Idempotente |
+| `server/db.js` | Pool do `pg`. SSL só em produção |
+| `server/auth.js` | scrypt, criação e validação de sessões, opções do cookie |
+| `server/rotas.js` | `POST/GET/DELETE /api/sessao` e a trava de tentativas |
+| `src/lib/api.ts` | Cliente do frontend; todos os pedidos com `credentials: "include"` |
+
+Decisões que não se devem inverter sem pensar:
+
+- **Sessão em cookie `httpOnly`**, não JWT em `localStorage`. O token nunca é acessível a JavaScript, portanto um XSS não o rouba.
+- **Na base de dados guarda-se o SHA-256 do token**, não o token. Uma leitura indevida da tabela `sessoes` não dá acesso a nada.
+- **Palavras-passe com `crypto.scrypt`** da biblioteca padrão. Evita o `bcrypt`, que é dependência nativa e complica o build no Render.
+- **A mesma mensagem de erro** para email inexistente e palavra-passe errada — distinguir permitiria descobrir que emails estão registados.
+- **A API é montada antes dos estáticos** no `server.js`; ao contrário, o fallback da SPA responderia `index.html` a `/api` inexistentes.
+
+A trava de tentativas em `rotas.js` é em memória: chega para força bruta simples, mas reinicia com o processo e não é partilhada entre instâncias. Se o serviço escalar, passa a precisar de Redis ou de uma tabela.
 
 ## Convenções
 
