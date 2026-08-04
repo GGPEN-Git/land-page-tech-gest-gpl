@@ -23,7 +23,17 @@ Landing page do **TECH-GEST-GPL** (GEDAE / GGPEN). Site estático de página ún
 
 ## Deploy
 
-**Render**, static site, definido em `render.yaml` (blueprint). Build: `npm ci && npx tsc --noEmit && npm run build`, publica `dist`.
+**Render**, Web Service em Node, definido em `render.yaml` (blueprint).
+
+| | |
+|---|---|
+| Build | `npm ci --include=dev && npx tsc --noEmit && npm run build` |
+| Start | `node server.js` |
+| Health check | `/healthz` |
+
+`server.js` é um Express que serve `dist/`: cache imutável em `/assets`, fallback da SPA para `index.html`, e três cabeçalhos de segurança. Escuta em `process.env.PORT` — **nunca fixar a porta**, o Render atribui-a.
+
+`--include=dev` no build é obrigatório: o Render define `NODE_ENV=production` e sem a flag o npm salta as devDependencies, ficando sem `vite` nem `typescript`.
 
 O site é servido na **raiz** do domínio, por isso `BASE_PATH` não é definido e o `base` do Vite fica `/`. O suporte a subcaminho continua no `vite.config.ts` caso volte a ser preciso.
 

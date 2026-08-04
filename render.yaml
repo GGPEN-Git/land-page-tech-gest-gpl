@@ -1,26 +1,16 @@
 services:
   - type: web
     name: land-page-tech-gest-gpl
-    runtime: static
+    runtime: node
+    region: frankfurt
 
-    # npm ci exige o package-lock.json sincronizado e commitado.
-    buildCommand: npm ci && npx tsc --noEmit && npm run build
-    staticPublishPath: ./dist
+    # --include=dev é obrigatório: o Render define NODE_ENV=production, e sem esta
+    # flag o npm salta as devDependencies — ficaria sem vite nem typescript e o build falhava.
+    buildCommand: npm ci --include=dev && npx tsc --noEmit && npm run build
+    startCommand: node server.js
 
-    # O site é servido na raiz do domínio, por isso não se define BASE_PATH:
-    # o vite.config.ts assume base "/".
+    healthCheckPath: /healthz
+
     envVars:
       - key: NODE_VERSION
         value: "20"
-
-    # Hoje a app não tem router, mas isto evita 404 se um dia passar a ter rotas.
-    routes:
-      - type: rewrite
-        source: /*
-        destination: /index.html
-
-    headers:
-      # Os ficheiros com hash no nome podem ser cacheados indefinidamente.
-      - path: /assets/*
-        name: Cache-Control
-        value: public, max-age=31536000, immutable
