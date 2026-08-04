@@ -55,14 +55,23 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
     const primeiraConsultaRef = useRef(true);
 
     const area = AREAS.find((a) => a.id === areaId) || null;
-    const camadaAtivaId = area?.camadaId || CAMADA_DADOS.id;
-    const camada = camadas[camadaAtivaId] || null;
 
-    const configAtiva = CAMADAS_EDIFICIOS.find((c) => c.id === camadaAtivaId) || CAMADA_DADOS;
-    const mostraValidacao = configAtiva.campoSimbologia === CAMPO_VALIDACAO;
+    /**
+     * Sem área escolhida somam-se as duas camadas de edifícios; com área, é só a dela.
+     * `chaveCamadas` existe para o efeito não voltar a correr por o array ser novo a cada render.
+     */
+    const configsAtivas = area ? CAMADAS_EDIFICIOS.filter((c) => c.id === area.camadaId) : CAMADAS_EDIFICIOS;
+    const chaveCamadas = configsAtivas.map((c) => c.id).join(",");
+    const idsAtivos = new Set(configsAtivas.map((c) => c.id));
 
-    // O cartão principal segue a simbologia do mapa; o bloco da aba mostra o outro,
-    // quando a camada ativa o tiver.
+    const camadasProntas = configsAtivas.every((c) => camadas[c.id]);
+
+    // Só uma camada tem o campo Validacao. Com as duas somadas, o único campo
+    // comparável é o Estado — por isso o cartão passa a mostrar Estado.
+    const soUma = configsAtivas.length === 1;
+    const mostraValidacao = soUma && configsAtivas[0]?.campoSimbologia === CAMPO_VALIDACAO;
+    const temValidacao = configsAtivas.some((c) => c.campoSimbologia === CAMPO_VALIDACAO);
+
     const principais = mostraValidacao ? VALIDACOES : ESTADOS;
     const contagensPrincipais = mostraValidacao ? validacoes : contagens;
 
@@ -75,24 +84,25 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
         setCamadas(encontradas);
     }, []);
 
-    // Só a camada de edifícios da área escolhida fica visível; os contornos ficam sempre.
+    // Ficam visíveis as camadas de edifícios ativas; os contornos seguem a configuração.
     useEffect(() => {
         for (const [id, featureLayer] of Object.entries(camadas)) {
             const config = CAMADAS.find((c) => c.id === id);
             if (!config) continue;
 
             if (!config.campoSimbologia) {
-                featureLayer.visible = true;
+                featureLayer.visible = config.visivelPorOmissao !== false;
                 continue;
             }
 
-            const ativa = id === camadaAtivaId;
+            const ativa = idsAtivos.has(id);
             featureLayer.visible = ativa;
 
             // Limpa o filtro das camadas que deixaram de estar ativas.
             if (!ativa) featureLayer.definitionExpression = "";
         }
-    }, [camadas, camadaAtivaId]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [camadas, chaveCamadas]);
 
     // Trocar de área invalida as escolhas anteriores: os bairros de uma não existem na outra.
     useEffect(() => {
@@ -101,22 +111,29 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
     }, [areaId]);
 
     useEffect(() => {
-        if (!camada) return;
+        if (!camadasProntas) return;
 
         let cancelado = false;
 
+        // O AOI da área só existe para a camada de Boavista; quando está definido,
+        // essa é de qualquer forma a única camada ativa.
         const efetivas = area?.aoi ? { ...selecoes, [CAMPO_AOI]: area.aoi } : selecoes;
 
-        // O filtro base da camada entra antes de tudo e não é removível pela interface.
-        const base = configAtiva.filtroBase;
-        const comBase = (clausula: string) => (base ? comCondicao(clausula, base) : clausula);
+        /** Cada camada tem o seu filtroBase, que a interface não remove. */
+        const whereDe = (config: (typeof CAMADAS_EDIFICIOS)[number], ignorar?: string) => {
+            const clausula = construirWhere(efetivas, ignorar);
+            return config.filtroBase ? comCondicao(clausula, config.filtroBase) : clausula;
+        };
 
-        const where = comBase(construirWhere(efetivas));
+        const alvos = configsAtivas.map((config) => ({ config, layer: camadas[config.id] }));
 
-        camada.definitionExpression = where;
+        for (const { config, layer } of alvos) {
+            layer.definitionExpression = whereDe(config);
+        }
+
         setAConsultar(true);
 
-        async function enquadrar(layer: FeatureLayer, clausula: string) {
+        async function enquadrar() {
             const view = viewRef.current;
             if (!view) return;
 
@@ -125,53 +142,80 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
                 return;
             }
 
+            const semFiltros = Object.keys(efetivas).length === 0;
+
             try {
-                if (clausula === "1=1") {
+                if (semFiltros) {
                     const inicial = viewpointInicialRef.current;
                     if (inicial) await view.goTo(inicial);
                     return;
                 }
 
-                const { count, extent } = await layer.queryExtent({ where: clausula });
+                // Com várias camadas, enquadra-se pela união das extensões.
+                let uniao = null;
 
-                if (cancelado || count === 0 || !extent) return;
+                for (const { config, layer } of alvos) {
+                    const { count, extent } = await layer.queryExtent({ where: whereDe(config) });
+                    if (count === 0 || !extent) continue;
 
-                await view.goTo(extent.expand(1.3));
+                    uniao = uniao ? uniao.union(extent) : extent.clone();
+                }
+
+                if (cancelado || !uniao) return;
+
+                await view.goTo(uniao.expand(1.3));
             } catch (e) {
                 console.debug("Não foi possível enquadrar a seleção:", e);
             }
         }
 
-        async function carregar(layer: FeatureLayer) {
+        async function carregar() {
             try {
+                // Opções de cada filtro: união dos valores de todas as camadas ativas.
                 const listas = await Promise.all(
                     FILTROS.map(async (filtro) => {
-                        const resultado = await layer.queryFeatures({
-                            where: comBase(construirWhere(efetivas, filtro.campo)),
-                            outFields: [filtro.campo],
-                            returnDistinctValues: true,
-                            returnGeometry: false,
-                            orderByFields: [filtro.campo],
-                        });
+                        const conjuntos = await Promise.all(
+                            alvos.map(async ({ config, layer }) => {
+                                const resultado = await layer.queryFeatures({
+                                    where: whereDe(config, filtro.campo),
+                                    outFields: [filtro.campo],
+                                    returnDistinctValues: true,
+                                    returnGeometry: false,
+                                    orderByFields: [filtro.campo],
+                                });
 
-                        const valores = resultado.features
-                            .map((f) => f.attributes[filtro.campo])
-                            .filter((v): v is string => typeof v === "string" && v.trim() !== "");
+                                return resultado.features
+                                    .map((f) => f.attributes[filtro.campo])
+                                    .filter((v): v is string => typeof v === "string" && v.trim() !== "");
+                            }),
+                        );
+
+                        const valores = [...new Set(conjuntos.flat())].sort((a, b) => a.localeCompare(b, "pt"));
 
                         return [filtro.campo, valores] as const;
                     }),
                 );
 
-                const contarPor = (campo: string, valor: number) =>
-                    layer.queryFeatureCount({ where: comCondicao(where, `${campo} = ${valor}`) });
+                /** Soma a contagem em todas as camadas ativas que tenham o campo. */
+                const somar = async (campo: string, valor: number) => {
+                    const parcelas = await Promise.all(
+                        alvos
+                            // Sambizanga não tem Validacao; pedi-lo daria erro no servidor.
+                            .filter(({ config }) => campo !== CAMPO_VALIDACAO || config.campoSimbologia === CAMPO_VALIDACAO)
+                            .map(({ config, layer }) =>
+                                layer.queryFeatureCount({ where: comCondicao(whereDe(config), `${campo} = ${valor}`) }),
+                            ),
+                    );
+
+                    return parcelas.reduce((total, parcela) => total + parcela, 0);
+                };
 
                 const totaisEstado = await Promise.all(
-                    ESTADOS.map(async (e) => [e.valor, await contarPor(CAMPO_ESTADO, e.valor)] as const),
+                    ESTADOS.map(async (e) => [e.valor, await somar(CAMPO_ESTADO, e.valor)] as const),
                 );
 
-                // A camada de Sambizanga não tem o campo Validacao — pedi-lo daria erro.
-                const totaisValidacao = mostraValidacao
-                    ? await Promise.all(VALIDACOES.map(async (v) => [v.valor, await contarPor(CAMPO_VALIDACAO, v.valor)] as const))
+                const totaisValidacao = temValidacao
+                    ? await Promise.all(VALIDACOES.map(async (v) => [v.valor, await somar(CAMPO_VALIDACAO, v.valor)] as const))
                     : [];
 
                 if (cancelado) return;
@@ -181,23 +225,24 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
                 setValidacoes(Object.fromEntries(totaisValidacao));
                 setErro(null);
 
-                await enquadrar(layer, where);
+                await enquadrar();
             } catch (e) {
                 if (cancelado) return;
 
-                console.error("Falha ao consultar a camada:", e);
+                console.error("Falha ao consultar as camadas:", e);
                 setErro("Não foi possível obter os dados do serviço.");
             } finally {
                 if (!cancelado) setAConsultar(false);
             }
         }
 
-        carregar(camada);
+        carregar();
 
         return () => {
             cancelado = true;
         };
-    }, [camada, area, selecoes, mostraValidacao, configAtiva]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [camadas, camadasProntas, chaveCamadas, area, selecoes, temValidacao]);
 
     function selecionar(campo: string, valor: string | null) {
         setSelecoes((atual) => {
@@ -414,7 +459,7 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
                             Repor filtros
                         </button>
 
-                        {/* Só faz sentido quando o cartão principal mostra validação. */}
+                        {/* O bloco secundário mostra o que não estiver no cartão principal. */}
                         {mostraValidacao && (
                             <>
                                 <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mt-8 mb-3">Estado</h2>
@@ -443,8 +488,39 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
                             </>
                         )}
 
+                        {!mostraValidacao && temValidacao && (
+                            <>
+                                <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mt-8 mb-3">
+                                    Validação
+                                </h2>
+
+                                <div className="space-y-2">
+                                    {VALIDACOES.map((item) => (
+                                        <div key={item.valor} className="flex items-center gap-3">
+                                            <span
+                                                className="w-4 h-4 rounded shrink-0"
+                                                style={{ backgroundColor: item.cor }}
+                                                aria-hidden="true"
+                                            />
+
+                                            <span className="text-white text-sm flex-1">{item.label}</span>
+
+                                            <span className="bg-[#0e2242] rounded-md px-3 py-1 min-w-[70px] text-center text-white text-base font-bold">
+                                                {validacoes[item.valor] === undefined ? "—" : formatarNumero(validacoes[item.valor])}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <p className="mt-2 text-[11px] text-white/40 leading-snug">
+                                    Só Boavista tem este campo. Sambizanga não entra nestes números.
+                                </p>
+                            </>
+                        )}
+
                         <p className="mt-8 text-[11px] text-white/40 leading-snug">
-                            Camada em uso: {configAtiva.titulo}
+                            {configsAtivas.length > 1 ? "Camadas somadas: " : "Camada em uso: "}
+                            {configsAtivas.map((c) => c.titulo).join(" + ")}
                         </p>
 
                         {erro && <p className="mt-4 text-xs text-[#e08a8a]">{erro}</p>}

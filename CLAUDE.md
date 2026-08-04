@@ -114,9 +114,20 @@ Os assets do SDK (ícones, fontes) vêm do CDN via `esriConfig.assetsPath`. **Se
 `CamadaConfig.filtroBase` é uma condição SQL aplicada **antes** de qualquer filtro do utilizador e que a interface não consegue remover. `CAMADA_DADOS` usa `AOI = 'Boavista'`: Porto Seco da Mulemba e os registos com `AOI` em branco não são desenhados nem contados. Entra em todas as consultas via o helper `comBase()` no `Dashboard`.
 
 Consequências no `Dashboard`:
-- `camadaAtivaId` decide qual camada é consultada e qual fica visível; as outras camadas de edifícios são ocultadas e têm o `definitionExpression` limpo.
+- `configsAtivas` é o conjunto de camadas de edifícios em uso. Com uma área escolhida é uma só; **sem área ("Todas") são as duas, e as contagens somam-se**. As camadas fora do conjunto ficam ocultas e com o `definitionExpression` limpo.
+- Cada camada aplica o **seu** `filtroBase` — daí o helper `whereDe(config)` em vez de um `where` único.
 - Mudar de área **limpa as restantes seleções** — os bairros de uma área não existem na outra.
-- O cartão principal segue `campoSimbologia` da camada ativa: `Validacao` na de Boavista & Porto Seco, `Estado` na de Sambizanga. Sambizanga **não tem** o campo `Validacao`, por isso essas contagens são saltadas e o bloco "Estado" da aba desaparece (passaria a duplicar o cartão).
+- As opções de cada filtro são a **união** dos valores distintos de todas as camadas ativas.
+
+O cartão principal:
+
+| Área | Cartão | Bloco da aba |
+|---|---|---|
+| Boavista | Validação | Estado |
+| Sambizanga e novas áreas | Estado | — |
+| Todas (soma) | Estado | Validação, só de Boavista |
+
+Com as duas camadas somadas o cartão passa a `Estado` porque é o **único campo que existe em ambas** — Sambizanga não tem `Validacao`. Somar validações das duas seria somar peras com maçãs.
 
 Restantes filtros: `selecoes` é `Record<campo, valor>`. `construirWhere(selecoes)` gera o SQL; `construirWhere(selecoes, campo)` ignora um campo para listar as suas próprias opções sem se auto-filtrar (filtros em cascata).
 

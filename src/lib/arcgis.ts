@@ -60,7 +60,15 @@ export const CAMADA_SAMBIZANGA: CamadaConfig = {
 /** Contornos de área, 1 polígono cada. Enquadramento, não dados. */
 export const CAMADAS_LIMITE: CamadaConfig[] = [
     { id: "boavista", titulo: "Boavista", url: `${BASE}/Boavista/FeatureServer/0` },
-    { id: "porto-seco-mulemba", titulo: "Porto Seco da Mulemba", url: `${BASE}/Porto_Seco_Mulemba/FeatureServer/0` },
+    {
+        id: "porto-seco-mulemba",
+        titulo: "Porto Seco da Mulemba",
+        url: `${BASE}/Porto_Seco_Mulemba/FeatureServer/0`,
+        // O webmap traz esta camada ligada; escondemo-la para Porto Seco não
+        // aparecer de forma nenhuma, já que os seus edifícios também estão fora
+        // pelo filtroBase de CAMADA_DADOS.
+        visivelPorOmissao: false,
+    },
 ];
 
 export const CAMADAS: CamadaConfig[] = [CAMADA_DADOS, CAMADA_SAMBIZANGA, ...CAMADAS_LIMITE];
@@ -84,7 +92,7 @@ export interface AreaConfig {
  */
 export const AREAS: AreaConfig[] = [
     { id: "boavista", label: "Boavista", camadaId: CAMADA_DADOS.id, aoi: "Boavista" },
-    { id: "sambizanga", label: "Sambizanga", camadaId: CAMADA_SAMBIZANGA.id },
+    { id: "sambizanga", label: "Sambizanga e novas áreas", camadaId: CAMADA_SAMBIZANGA.id },
     // Porto Seco da Mulemba existe no campo AOI e continua a ser desenhado no mapa,
     // mas foi retirado da lista de áreas a pedido. Para o repor, basta descomentar:
     // { id: "porto-seco", label: "Porto Seco da Mulemba", camadaId: CAMADA_DADOS.id, aoi: "Porto Seco da Mulemba" },
