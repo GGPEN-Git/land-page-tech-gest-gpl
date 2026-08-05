@@ -101,7 +101,25 @@ Atenção: cada camada é desenhada por um campo diferente. `CAMADA_DADOS` (Boav
 
 A camada de Sambizanga tem `Estado = 0` em todos os 1517 registos, pelo que o seu renderer a pinta inteiramente de vermelho. Como não entra nos filtros nem nas contagens, arranca oculta (`visivelPorOmissao: false`) e liga-se na secção **Camadas** da aba. `Boavista` e `Porto_Seco_Mulemba` têm 1 polígono cada — são contornos de área, não edifícios.
 
-Por isso o cartão sempre à vista mostra **Validação** — é a legenda do que está pintado no mapa. `Estado` é estatística e vive na aba lateral. Se um dia o renderer de `CAMADA_DADOS` passar a ser por `Estado` no ArcGIS Online, os dois painéis devem trocar de sítio outra vez.
+O seletor **Colorir mapa por** tem três modos:
+
+| Modo | Efeito |
+|---|---|
+| **Webmap** (omissão) | Mantém o renderer do ArcGIS Online. Alterações de simbologia feitas no portal aparecem sem tocar no código |
+| **Estado** | `UniqueValueRenderer` construído por `lib/simbologia.ts` a partir de `ESTADOS` |
+| **Validação** | Idem, a partir de `VALIDACOES`. Indisponível quando Sambizanga está ativa |
+
+Os renderers originais são guardados em `renderersOriginaisRef` na primeira vez que cada camada é vista, e repostos ao voltar a "Webmap".
+
+**A legenda lê cores e rótulos do renderer em uso**, via `lerLegenda()`. Os valores em `ESTADOS`/`VALIDACOES` passam a servir de reserva, para o caso de o renderer não ser por valor único. Se alguém mudar a simbologia ou os rótulos no ArcGIS Online, o cartão acompanha sozinho.
+
+O que continua a vir do código é a **lista de valores contados** (`0`, `1`, `2`). Um valor novo no domínio não é contado até ser acrescentado a `ESTADOS`/`VALIDACOES`.
+
+Por isso `MapaArcGIS` faz `load()` em **todas** as camadas configuradas: sem estarem carregadas, `layer.renderer` ainda não existe e não há nada para ler.
+
+**O que reflete automaticamente do ArcGIS Online:** dados (registos, atributos), simbologia no modo Webmap, mapa de fundo, enquadramento inicial, e camadas acrescentadas ao webmap (são desenhadas, mas só entram em filtros e contagens depois de registadas em `CAMADAS`).
+
+**O que não reflete:** os rótulos e cores em `ESTADOS`/`VALIDACOES`, que estão escritos no código.
 
 `MapaArcGIS` carrega o webmap, acrescenta só as camadas de `CAMADAS` que faltem (compara pelo URL normalizado com `urlCompletaDaCamada`, porque o SDK guarda o índice separado em `layerId`) e devolve a camada de dados via `onCamadaDados`.
 

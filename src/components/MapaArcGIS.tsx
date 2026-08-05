@@ -81,8 +81,11 @@ export function MapaArcGIS({ className = "absolute inset-0", onViewReady, onCama
                     else console.warn("Camada não encontrada no webmap:", config.url);
                 }
 
-                const camadaDados = porId[CAMADA_DADOS.id];
-                if (camadaDados) await camadaDados.load();
+                // Carrega todas: sem isto o renderer de algumas ainda não existe
+                // e a legenda não o consegue ler.
+                await Promise.all(Object.values(porId).map((camada) => camada.load().catch(() => null)));
+
+                if (!porId[CAMADA_DADOS.id]) console.warn("Camada de dados ausente:", CAMADA_DADOS.url);
 
                 if (!cancelado) onCamadas?.(porId);
             } catch (e) {

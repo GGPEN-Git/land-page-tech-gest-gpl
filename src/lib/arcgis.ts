@@ -133,6 +133,9 @@ export const ESTADOS: ContagemConfig[] = [
     { valor: 2, label: "Inscritos", cor: "#5dd618" },
 ];
 
+/** Símbolo por omissão dos renderers: aplica-se ao que não encaixa em nenhum valor conhecido. */
+export const COR_POR_OMISSAO = "#999999";
+
 /**
  * Domínio do campo Validacao — 0: Outros, 1: Primária, 2: Secundária.
  * Cores tiradas do renderer de `CAMADA_DADOS` no webmap; "Outros" é o símbolo por omissão.

@@ -9,6 +9,7 @@ import { Utilizadores } from "./Utilizadores";
 import { MenuConta } from "./MenuConta";
 import { AlterarPalavraPasse } from "./AlterarPalavraPasse";
 import { asset } from "../lib/utils";
+import { criarRenderer, lerLegenda } from "../lib/simbologia";
 import type { Utilizador } from "../lib/api";
 import {
     AREAS,
@@ -43,15 +44,26 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
     const [areaId, setAreaId] = useState<string | null>(null);
     /** Seleção dos restantes filtros (campo → valor). */
     const [selecoes, setSelecoes] = useState<Record<string, string>>({});
+    /**
+     * Como colorir os edifícios: "webmap" mantém a simbologia definida no ArcGIS
+     * Online — assim qualquer alteração feita no portal aparece aqui sem tocar no código.
+     */
+    const [colorirPor, setColorirPor] = useState<"webmap" | typeof CAMPO_VALIDACAO | typeof CAMPO_ESTADO>("webmap");
 
     const [opcoes, setOpcoes] = useState<Record<string, string[]>>({});
     const [contagens, setContagens] = useState<Record<number, number>>({});
     const [validacoes, setValidacoes] = useState<Record<number, number>>({});
 
+    /** Cores e rótulos lidos do renderer em uso, para a legenda nunca mentir sobre o mapa. */
+    const [coresMapa, setCoresMapa] = useState<Record<string, string>>({});
+    const [rotulosMapa, setRotulosMapa] = useState<Record<string, string>>({});
+
     const [camadas, setCamadas] = useState<Record<string, FeatureLayer>>({});
     const [aConsultar, setAConsultar] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
 
+    /** Renderers tal como vieram do webmap, para os poder repor. */
+    const renderersOriginaisRef = useRef<Record<string, FeatureLayer["renderer"]>>({});
     const viewRef = useRef<MapView | null>(null);
     const viewpointInicialRef = useRef<Viewpoint | null>(null);
     const primeiraConsultaRef = useRef(true);
@@ -68,11 +80,13 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
 
     const camadasProntas = configsAtivas.every((c) => camadas[c.id]);
 
-    // Só uma camada tem o campo Validacao. Com as duas somadas, o único campo
-    // comparável é o Estado — por isso o cartão passa a mostrar Estado.
-    const soUma = configsAtivas.length === 1;
-    const mostraValidacao = soUma && configsAtivas[0]?.campoSimbologia === CAMPO_VALIDACAO;
+    // Validação só existe na camada de Boavista; com Sambizanga em cena não é opção.
+    const podeValidacao = configsAtivas.every((c) => c.campoSimbologia === CAMPO_VALIDACAO);
     const temValidacao = configsAtivas.some((c) => c.campoSimbologia === CAMPO_VALIDACAO);
+
+    // O cartão mostra sempre o campo por que o mapa está pintado. Com a simbologia
+    // do webmap, esse campo é o `campoSimbologia` declarado para a camada.
+    const mostraValidacao = podeValidacao && (colorirPor === "webmap" || colorirPor === CAMPO_VALIDACAO);
 
     const principais = mostraValidacao ? VALIDACOES : ESTADOS;
     const contagensPrincipais = mostraValidacao ? validacoes : contagens;
@@ -105,6 +119,49 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [camadas, chaveCamadas]);
+
+    // Substitui o renderer do webmap quando se escolhe um campo; "webmap" repõe o original.
+    useEffect(() => {
+        for (const config of configsAtivas) {
+            const layer = camadas[config.id];
+            if (!layer) continue;
+
+            // Guarda-se o renderer do portal na primeira vez, para o poder repor.
+            if (!(config.id in renderersOriginaisRef.current)) {
+                renderersOriginaisRef.current[config.id] = layer.renderer;
+            }
+
+            if (colorirPor === "webmap") {
+                layer.renderer = renderersOriginaisRef.current[config.id];
+                continue;
+            }
+
+            // Sambizanga não tem Validacao: mantém-se pintada por Estado.
+            const campo =
+                colorirPor === CAMPO_VALIDACAO && config.campoSimbologia !== CAMPO_VALIDACAO ? CAMPO_ESTADO : colorirPor;
+
+            layer.renderer = criarRenderer(campo, campo === CAMPO_VALIDACAO ? VALIDACOES : ESTADOS);
+        }
+
+        // Depois de definidos, lê-se do renderer o que o cartão vai mostrar.
+        const campoCartao = mostraValidacao ? CAMPO_VALIDACAO : CAMPO_ESTADO;
+        let cores: Record<string, string> = {};
+        let rotulos: Record<string, string> = {};
+
+        for (const config of configsAtivas) {
+            const legenda = lerLegenda(camadas[config.id]?.renderer);
+
+            if (legenda.campo === campoCartao && Object.keys(legenda.cores).length > 0) {
+                cores = legenda.cores;
+                rotulos = legenda.rotulos;
+                break;
+            }
+        }
+
+        setCoresMapa(cores);
+        setRotulosMapa(rotulos);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [camadas, chaveCamadas, colorirPor, mostraValidacao]);
 
     // Trocar de área invalida as escolhas anteriores: os bairros de uma não existem na outra.
     useEffect(() => {
@@ -443,6 +500,44 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
                             Repor filtros
                         </button>
 
+                        <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mt-8 mb-3">
+                            Colorir mapa por
+                        </h2>
+
+                        <div className="flex rounded-lg bg-[#0e2242] p-1">
+                            {(
+                                [
+                                    { campo: "webmap", label: "Webmap" },
+                                    { campo: CAMPO_ESTADO, label: "Estado" },
+                                    { campo: CAMPO_VALIDACAO, label: "Validação" },
+                                ] as const
+                            ).map((opcao) => {
+                                const indisponivel = opcao.campo === CAMPO_VALIDACAO && !podeValidacao;
+
+                                return (
+                                    <button
+                                        key={opcao.campo}
+                                        type="button"
+                                        onClick={() => setColorirPor(opcao.campo)}
+                                        disabled={indisponivel}
+                                        title={indisponivel ? "Sambizanga não tem o campo Validação" : undefined}
+                                        className={`flex-1 rounded-md py-1.5 text-xs transition-colors ${
+                                            colorirPor === opcao.campo && !indisponivel
+                                                ? "bg-[#1e6fd9] text-white"
+                                                : "text-white/60 hover:text-white disabled:opacity-30 disabled:hover:text-white/60"
+                                        }`}
+                                    >
+                                        {opcao.label}
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <p className="mt-2 text-[11px] text-white/40 leading-snug">
+                            Em <strong className="font-semibold text-white/60">Webmap</strong> usam-se as cores definidas no
+                            ArcGIS Online. Alterações feitas lá aparecem aqui sem mexer no código.
+                        </p>
+
                         {/* O bloco secundário mostra o que não estiver no cartão principal. */}
                         {mostraValidacao && (
                             <>
@@ -466,9 +561,6 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
                                     ))}
                                 </div>
 
-                                <p className="mt-2 text-[11px] text-white/40 leading-snug">
-                                    O mapa colore os edifícios por validação, não por estado.
-                                </p>
                             </>
                         )}
 
@@ -499,6 +591,7 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
                                 <p className="mt-2 text-[11px] text-white/40 leading-snug">
                                     Só Boavista tem este campo. Sambizanga não entra nestes números.
                                 </p>
+
                             </>
                         )}
 
@@ -574,9 +667,15 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
                         <div className="px-5 py-4 space-y-2">
                             {principais.map((item) => (
                                 <div key={item.valor} className="flex items-center gap-3">
-                                    <span className="w-4 h-4 rounded shrink-0" style={{ backgroundColor: item.cor }} aria-hidden="true" />
+                                    <span
+                                        className="w-4 h-4 rounded shrink-0"
+                                        style={{ backgroundColor: coresMapa[String(item.valor)] || item.cor }}
+                                        aria-hidden="true"
+                                    />
 
-                                    <span className="text-white text-sm flex-1">{item.label}</span>
+                                    <span className="text-white text-sm flex-1">
+                                        {rotulosMapa[String(item.valor)] || item.label}
+                                    </span>
 
                                     <span className="bg-[#0e2242] rounded-md px-3 py-1 min-w-[70px] text-center text-white text-base font-bold">
                                         {contagensPrincipais[item.valor] === undefined
