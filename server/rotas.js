@@ -2,6 +2,7 @@ import express from "express";
 import { consultar, consultarUma } from "./db.js";
 import {
     NOME_COOKIE,
+    apagarOutrasSessoes,
     apagarSessao,
     cifrarPalavraPasse,
     conferirPalavraPasse,
@@ -126,6 +127,42 @@ rotas.delete("/sessao", async (req, res) => {
     res.status(204).end();
 });
 
+// ── A própria conta ──────────────────────────────────────────────────────
+
+/** Alterar a própria palavra-passe. Exige a atual, mesmo com sessão válida. */
+rotas.patch("/eu/palavra-passe", exigirSessao, async (req, res) => {
+    const atual = String(req.body?.palavraPasseAtual || "");
+    const nova = String(req.body?.palavraPasse || "");
+
+    if (nova.length < MIN_PALAVRA_PASSE) {
+        res.status(400).json({ erro: `A nova palavra-passe deve ter pelo menos ${MIN_PALAVRA_PASSE} caracteres.` });
+        return;
+    }
+
+    if (nova === atual) {
+        res.status(400).json({ erro: "A nova palavra-passe tem de ser diferente da atual." });
+        return;
+    }
+
+    const registo = await consultarUma("select palavra_passe from utilizadores where id = $1", [req.utilizador.id]);
+
+    // Confirma-se a atual porque um cookie roubado não deve permitir mudar a senha.
+    if (!registo || !(await conferirPalavraPasse(atual, registo.palavra_passe))) {
+        res.status(401).json({ erro: "A palavra-passe atual está incorreta." });
+        return;
+    }
+
+    await consultar("update utilizadores set palavra_passe = $1 where id = $2", [
+        await cifrarPalavraPasse(nova),
+        req.utilizador.id,
+    ]);
+
+    // Fecha as restantes sessões; a de quem está a alterar mantém-se.
+    await apagarOutrasSessoes(req.utilizador.id, req.cookies?.[NOME_COOKIE]);
+
+    res.status(204).end();
+});
+
 // ── Gestão de utilizadores (só admin) ────────────────────────────────────
 
 rotas.get("/utilizadores", exigirSessao, exigirAdmin, async (_req, res) => {
@@ -204,6 +241,18 @@ rotas.patch("/utilizadores/:id", exigirSessao, exigirAdmin, async (req, res) => 
 
         valores.push(req.body.papel);
         alteracoes.push(`papel = $${valores.length}`);
+    }
+
+    if (typeof req.body?.nome === "string") {
+        const nome = req.body.nome.trim();
+
+        if (!nome) {
+            res.status(400).json({ erro: "O nome não pode ficar vazio." });
+            return;
+        }
+
+        valores.push(nome);
+        alteracoes.push(`nome = $${valores.length}`);
     }
 
     if (req.body?.palavraPasse) {

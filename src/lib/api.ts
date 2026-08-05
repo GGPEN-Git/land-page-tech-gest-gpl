@@ -81,9 +81,16 @@ export function criarUtilizador(dados: { email: string; nome: string; palavraPas
     });
 }
 
+export function alterarPalavraPassePropria(palavraPasseAtual: string, palavraPasse: string) {
+    return pedir<void>("/eu/palavra-passe", {
+        method: "PATCH",
+        body: JSON.stringify({ palavraPasseAtual, palavraPasse }),
+    });
+}
+
 export function atualizarUtilizador(
     id: string,
-    alteracoes: { ativo?: boolean; papel?: Papel; palavraPasse?: string },
+    alteracoes: { ativo?: boolean; papel?: Papel; palavraPasse?: string; nome?: string },
 ) {
     return pedir<{ utilizador: UtilizadorDetalhe }>(`/utilizadores/${id}`, {
         method: "PATCH",

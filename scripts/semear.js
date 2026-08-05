@@ -24,12 +24,16 @@ const CONTAS = [
         nome: process.env.ADMIN_NOME || "Administrador",
         papel: "admin",
         palavraPasse: process.env.ADMIN_SENHA || gerarPalavraPasse(),
+        // Só se imprime a palavra-passe quando fomos nós a inventá-la. Se veio de
+        // variável de ambiente, quem a definiu já a conhece e não vai para o log.
+        gerada: !process.env.ADMIN_SENHA,
     },
     {
         email: process.env.UTILIZADOR_EMAIL || "tecnico@ggpen.gov.ao",
         nome: process.env.UTILIZADOR_NOME || "Técnico",
         papel: "utilizador",
         palavraPasse: process.env.UTILIZADOR_SENHA || gerarPalavraPasse(),
+        gerada: !process.env.UTILIZADOR_SENHA,
     },
 ];
 
@@ -55,17 +59,20 @@ try {
         console.log("\nNada a fazer. Para repor uma palavra-passe use: npm run db:utilizador -- ...");
     } else {
         console.log("\n─────────────────────────────────────────────");
-        console.log(" Contas criadas — guarde estas palavras-passe:");
+        console.log(" Contas criadas:");
         console.log("─────────────────────────────────────────────");
 
         for (const conta of criadas) {
             console.log(`\n  ${conta.papel.toUpperCase()}`);
             console.log(`  Email:         ${conta.email}`);
-            console.log(`  Palavra-passe: ${conta.palavraPasse}`);
+            console.log(
+                conta.gerada
+                    ? `  Palavra-passe: ${conta.palavraPasse}   <-- guarde, não volta a ser mostrada`
+                    : "  Palavra-passe: a que definiu na variável de ambiente",
+            );
         }
 
-        console.log("\n─────────────────────────────────────────────");
-        console.log(" Não voltarão a ser mostradas.\n");
+        console.log("\n─────────────────────────────────────────────\n");
     }
 } catch (erro) {
     console.error("Falha ao semear:", erro.message);

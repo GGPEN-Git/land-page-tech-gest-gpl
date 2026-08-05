@@ -70,6 +70,18 @@ export async function apagarSessao(token) {
     await consultar("delete from sessoes where token_hash = $1", [hashDoToken(token)]);
 }
 
+/**
+ * Fecha as outras sessões do utilizador e mantém a atual.
+ * Usado ao mudar a própria palavra-passe: quem tiver o cookie antigo perde o acesso,
+ * mas quem está a fazer a alteração não é expulso.
+ */
+export async function apagarOutrasSessoes(utilizadorId, tokenAtual) {
+    await consultar("delete from sessoes where utilizador_id = $1 and token_hash <> $2", [
+        utilizadorId,
+        tokenAtual ? hashDoToken(tokenAtual) : "",
+    ]);
+}
+
 /** Remove sessões caducadas. Chamado no arranque; a tabela não cresce sem fim. */
 export async function limparSessoesCaducadas() {
     await consultar("delete from sessoes where expira_em <= now()");

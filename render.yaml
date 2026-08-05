@@ -7,7 +7,9 @@ services:
     # --include=dev é obrigatório: o Render define NODE_ENV=production, e sem esta
     # flag o npm salta as devDependencies — ficaria sem vite nem typescript.
     # A migração corre aqui: é idempotente, pode repetir-se em cada deploy.
-    buildCommand: npm ci --include=dev && npx tsc --noEmit && npm run build && npm run db:migrar
+    # db:semear usa "on conflict do nothing": correr em cada deploy não mexe
+    # nas contas existentes nem repõe palavras-passe.
+    buildCommand: npm ci --include=dev && npx tsc --noEmit && npm run build && npm run db:migrar && npm run db:semear
     startCommand: node server.js
 
     healthCheckPath: /healthz
@@ -24,3 +26,13 @@ services:
         sync: false
       - key: SESSAO_DIAS
         value: "7"
+      # Contas iniciais. Definidas no painel para não ficarem no repositório
+      # nem serem impressas no log do build.
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_SENHA
+        sync: false
+      - key: UTILIZADOR_EMAIL
+        sync: false
+      - key: UTILIZADOR_SENHA
+        sync: false

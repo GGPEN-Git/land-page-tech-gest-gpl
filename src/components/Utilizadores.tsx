@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { Check, Loader2, Plus, X } from "lucide-react";
+import { Check, KeyRound, Loader2, Pencil, Plus, X } from "lucide-react";
 import {
     atualizarUtilizador,
     criarUtilizador,
@@ -23,6 +23,11 @@ export function Utilizadores({ atual, onFechar }: UtilizadoresProps) {
     const [aCarregar, setACarregar] = useState(true);
     const [erro, setErro] = useState<string | null>(null);
     const [aviso, setAviso] = useState<string | null>(null);
+
+    /** Id do utilizador com a linha de edição aberta. */
+    const [aEditar, setAEditar] = useState<string | null>(null);
+    const [nomeEditado, setNomeEditado] = useState("");
+    const [novaPalavraPasse, setNovaPalavraPasse] = useState("");
 
     const [aCriar, setACriar] = useState(false);
     const [email, setEmail] = useState("");
@@ -84,6 +89,54 @@ export function Utilizadores({ atual, onFechar }: UtilizadoresProps) {
             await recarregar();
         } catch (e) {
             setErro(e instanceof Error ? e.message : "Não foi possível alterar a conta.");
+        }
+    }
+
+    function abrirEdicao(utilizador: UtilizadorDetalhe) {
+        setAEditar(utilizador.id === aEditar ? null : utilizador.id);
+        setNomeEditado(utilizador.nome);
+        setNovaPalavraPasse("");
+        setErro(null);
+        setAviso(null);
+    }
+
+    async function guardarEdicao(utilizador: UtilizadorDetalhe) {
+        const alteracoes: { nome?: string; palavraPasse?: string } = {};
+
+        if (nomeEditado.trim() && nomeEditado.trim() !== utilizador.nome) {
+            alteracoes.nome = nomeEditado.trim();
+        }
+
+        if (novaPalavraPasse) {
+            if (novaPalavraPasse.length < MIN_PALAVRA_PASSE) {
+                setErro(`A palavra-passe deve ter pelo menos ${MIN_PALAVRA_PASSE} caracteres.`);
+                return;
+            }
+
+            alteracoes.palavraPasse = novaPalavraPasse;
+        }
+
+        if (Object.keys(alteracoes).length === 0) {
+            setAEditar(null);
+            return;
+        }
+
+        setErro(null);
+
+        try {
+            await atualizarUtilizador(utilizador.id, alteracoes);
+
+            setAviso(
+                alteracoes.palavraPasse
+                    ? `Palavra-passe de ${utilizador.email} alterada. As sessões abertas dessa conta foram terminadas.`
+                    : `Dados de ${utilizador.email} atualizados.`,
+            );
+
+            setAEditar(null);
+            setNovaPalavraPasse("");
+            await recarregar();
+        } catch (e) {
+            setErro(e instanceof Error ? e.message : "Não foi possível guardar as alterações.");
         }
     }
 
@@ -242,6 +295,16 @@ export function Utilizadores({ atual, onFechar }: UtilizadoresProps) {
                                         <div className="flex items-center gap-2 shrink-0">
                                             <button
                                                 type="button"
+                                                onClick={() => abrirEdicao(utilizador)}
+                                                title="Editar nome e palavra-passe"
+                                                className="flex items-center gap-1 text-xs text-white/70 hover:text-white underline underline-offset-2"
+                                            >
+                                                <Pencil className="w-3 h-3" />
+                                                Editar
+                                            </button>
+
+                                            <button
+                                                type="button"
                                                 onClick={() => alternarPapel(utilizador)}
                                                 disabled={euProprio}
                                                 className="text-xs text-white/70 hover:text-white underline underline-offset-2 disabled:opacity-30 disabled:no-underline disabled:cursor-not-allowed"
@@ -258,6 +321,53 @@ export function Utilizadores({ atual, onFechar }: UtilizadoresProps) {
                                                 {utilizador.ativo ? "Desativar" : "Reativar"}
                                             </button>
                                         </div>
+
+                                        {aEditar === utilizador.id && (
+                                            <div className="w-full border-t border-white/10 pt-3 mt-1 grid gap-2 sm:grid-cols-2">
+                                                <label className="flex flex-col gap-1">
+                                                    <span className="text-[11px] text-white/50">Nome</span>
+                                                    <input
+                                                        type="text"
+                                                        value={nomeEditado}
+                                                        onChange={(e) => setNomeEditado(e.target.value)}
+                                                        className="bg-transparent border border-white/20 rounded-md px-3 py-2 text-sm text-white focus:outline-none focus:border-white/50"
+                                                    />
+                                                </label>
+
+                                                <label className="flex flex-col gap-1">
+                                                    <span className="flex items-center gap-1 text-[11px] text-white/50">
+                                                        <KeyRound className="w-3 h-3" />
+                                                        Nova palavra-passe (deixe vazio para manter)
+                                                    </span>
+                                                    <input
+                                                        type="text"
+                                                        value={novaPalavraPasse}
+                                                        onChange={(e) => setNovaPalavraPasse(e.target.value)}
+                                                        placeholder={`Mín. ${MIN_PALAVRA_PASSE} caracteres`}
+                                                        className="bg-transparent border border-white/20 rounded-md px-3 py-2 text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-white/50"
+                                                    />
+                                                </label>
+
+                                                <div className="sm:col-span-2 flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => guardarEdicao(utilizador)}
+                                                        className="flex items-center gap-2 px-3 py-1.5 rounded-md bg-white text-stone-900 text-xs font-semibold hover:bg-stone-100 transition-colors"
+                                                    >
+                                                        <Check className="w-3.5 h-3.5" />
+                                                        Guardar
+                                                    </button>
+
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setAEditar(null)}
+                                                        className="px-3 py-1.5 rounded-md text-xs text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+                                                    >
+                                                        Cancelar
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
                                     </li>
                                 );
                             })}

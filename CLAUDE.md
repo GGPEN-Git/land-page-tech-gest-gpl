@@ -170,6 +170,11 @@ Alterar palavra-passe, papel ou desativar **apaga as sessões abertas** desse ut
 | `server/auth.js` | scrypt, criação e validação de sessões, opções do cookie |
 | `server/rotas.js` | `POST/GET/DELETE /api/sessao` e a trava de tentativas |
 | `src/lib/api.ts` | Cliente do frontend; todos os pedidos com `credentials: "include"` |
+| `components/MenuConta.tsx` | Menu da conta na barra do dashboard |
+| `components/Utilizadores.tsx` | Painel de funcionários e acessos (só admin) |
+| `components/AlterarPalavraPasse.tsx` | Alteração da própria palavra-passe |
+
+Alterar a própria palavra-passe **exige a atual** (`PATCH /api/eu/palavra-passe`), mesmo havendo sessão válida — um cookie roubado não deve permitir tomar a conta. Fecha as outras sessões e mantém a de quem está a alterar.
 
 Decisões que não se devem inverter sem pensar:
 

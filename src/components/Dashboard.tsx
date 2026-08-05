@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ChevronDown, ChevronLeft, ChevronRight, Home, Minus, Plus, RotateCcw, User, Users } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Home, Minus, Plus, RotateCcw } from "lucide-react";
 import type MapView from "@arcgis/core/views/MapView";
 import type Viewpoint from "@arcgis/core/Viewpoint";
 import type FeatureLayer from "@arcgis/core/layers/FeatureLayer";
 import { MapaArcGIS } from "./MapaArcGIS";
 import { Utilizadores } from "./Utilizadores";
+import { MenuConta } from "./MenuConta";
+import { AlterarPalavraPasse } from "./AlterarPalavraPasse";
 import { asset } from "../lib/utils";
 import type { Utilizador } from "../lib/api";
 import {
@@ -34,6 +36,7 @@ interface DashboardProps {
 export function Dashboard({ utilizador, onLogout }: DashboardProps) {
     const [abaAberta, setAbaAberta] = useState(true);
     const [gestaoAberta, setGestaoAberta] = useState(false);
+    const [senhaAberta, setSenhaAberta] = useState(false);
     const [filtroAberto, setFiltroAberto] = useState<string | null>(null);
 
     /** Área escolhida — decide a camada ativa e, quando aplicável, o valor de AOI. */
@@ -306,32 +309,14 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                        <span className="text-white text-xs md:text-sm hidden sm:block">
-                            Bem-vindo , {utilizador?.nome || utilizador?.email || "Utilizador"}
-                        </span>
-
-                        {/* Só administradores. O servidor confirma o papel na mesma — isto é conveniência, não segurança. */}
-                        {utilizador?.papel === "admin" && (
-                            <button
-                                type="button"
-                                onClick={() => setGestaoAberta(true)}
-                                title="Gerir utilizadores"
-                                aria-label="Gerir utilizadores"
-                                className="w-8 h-8 rounded-full border border-white/60 flex items-center justify-center text-white hover:bg-white hover:text-black transition-colors"
-                            >
-                                <Users className="w-4 h-4" />
-                            </button>
+                        {utilizador && (
+                            <MenuConta
+                                utilizador={utilizador}
+                                onGerirUtilizadores={() => setGestaoAberta(true)}
+                                onAlterarPalavraPasse={() => setSenhaAberta(true)}
+                                onTerminarSessao={() => onLogout?.()}
+                            />
                         )}
-
-                        <button
-                            type="button"
-                            onClick={onLogout}
-                            title="Terminar sessão"
-                            aria-label="Terminar sessão"
-                            className="w-8 h-8 rounded-full border border-white flex items-center justify-center text-white hover:bg-white hover:text-black transition-colors"
-                        >
-                            <User className="w-4 h-4" />
-                        </button>
                     </div>
                 </div>
             </header>
@@ -608,6 +593,8 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
             {gestaoAberta && utilizador && (
                 <Utilizadores atual={utilizador} onFechar={() => setGestaoAberta(false)} />
             )}
+
+            {senhaAberta && <AlterarPalavraPasse onFechar={() => setSenhaAberta(false)} />}
         </div>
     );
 }
