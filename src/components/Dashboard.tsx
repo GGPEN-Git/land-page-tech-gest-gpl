@@ -47,8 +47,9 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
     /**
      * Como colorir os edifícios: "webmap" mantém a simbologia definida no ArcGIS
      * Online — assim qualquer alteração feita no portal aparece aqui sem tocar no código.
+     * Por omissão usa-se "Estado" para o utilizador ver imediatamente a coloração por estado.
      */
-    const [colorirPor, setColorirPor] = useState<"webmap" | typeof CAMPO_VALIDACAO | typeof CAMPO_ESTADO>("webmap");
+    const [colorirPor, setColorirPor] = useState<"webmap" | typeof CAMPO_VALIDACAO | typeof CAMPO_ESTADO>(CAMPO_ESTADO);
 
     const [opcoes, setOpcoes] = useState<Record<string, string[]>>({});
     const [contagens, setContagens] = useState<Record<number, number>>({});
