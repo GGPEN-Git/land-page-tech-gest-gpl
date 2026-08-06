@@ -554,11 +554,6 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                             </div>
                         )}
 
-                        <p className="mt-2 text-[11px] text-white/40 leading-snug">
-                            Em <strong className="font-semibold text-white/60">Webmap</strong> usam-se as cores definidas no
-                            ArcGIS Online. Alterações feitas lá aparecem aqui sem mexer no código.
-                        </p>
-
                         {/* O bloco secundário mostra o que não estiver no cartão principal. */}
                         {mostraValidacao && (
                             <>
