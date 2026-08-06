@@ -10,7 +10,7 @@ import { MenuConta } from "./MenuConta";
 import { AlterarPalavraPasse } from "./AlterarPalavraPasse";
 import { asset } from "../lib/utils";
 import { criarRenderer, lerLegenda } from "../lib/simbologia";
-import type { Utilizador } from "../lib/api";
+import type { Papel, Utilizador } from "../lib/api";
 import {
     AREAS,
     CAMADAS,
@@ -32,9 +32,10 @@ const LARGURA_ABA = 320;
 interface DashboardProps {
     utilizador: Utilizador | null;
     onLogout?: () => void;
+    papel?: Papel;
 }
 
-export function Dashboard({ utilizador, onLogout }: DashboardProps) {
+export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
     const [abaAberta, setAbaAberta] = useState(true);
     const [gestaoAberta, setGestaoAberta] = useState(false);
     const [senhaAberta, setSenhaAberta] = useState(false);
@@ -50,6 +51,13 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
      * Por omissão usa-se "Estado" para o utilizador ver imediatamente a coloração por estado.
      */
     const [colorirPor, setColorirPor] = useState<"webmap" | typeof CAMPO_VALIDACAO | typeof CAMPO_ESTADO>(CAMPO_ESTADO);
+
+    // Força "Estado" para utilizadores não-admin e impede alteração.
+    useEffect(() => {
+        if (papel !== "admin" && colorirPor !== CAMPO_ESTADO) {
+            setColorirPor(CAMPO_ESTADO);
+        }
+    }, [papel, colorirPor]);
 
     const [opcoes, setOpcoes] = useState<Record<string, string[]>>({});
     const [contagens, setContagens] = useState<Record<number, number>>({});
@@ -505,34 +513,46 @@ export function Dashboard({ utilizador, onLogout }: DashboardProps) {
                             Colorir mapa por
                         </h2>
 
-                        <div className="flex rounded-lg bg-[#0e2242] p-1">
-                            {(
-                                [
-                                    { campo: "webmap", label: "Webmap" },
-                                    { campo: CAMPO_ESTADO, label: "Estado" },
-                                    { campo: CAMPO_VALIDACAO, label: "Validação" },
-                                ] as const
-                            ).map((opcao) => {
-                                const indisponivel = opcao.campo === CAMPO_VALIDACAO && !podeValidacao;
+                        {papel === "admin" ? (
+                            <div className="flex rounded-lg bg-[#0e2242] p-1">
+                                {(
+                                    [
+                                        { campo: "webmap", label: "Webmap" },
+                                        { campo: CAMPO_ESTADO, label: "Estado" },
+                                        { campo: CAMPO_VALIDACAO, label: "Validação" },
+                                    ] as const
+                                ).map((opcao) => {
+                                    const indisponivel = opcao.campo === CAMPO_VALIDACAO && !podeValidacao;
 
-                                return (
-                                    <button
-                                        key={opcao.campo}
-                                        type="button"
-                                        onClick={() => setColorirPor(opcao.campo)}
-                                        disabled={indisponivel}
-                                        title={indisponivel ? "Sambizanga não tem o campo Validação" : undefined}
-                                        className={`flex-1 rounded-md py-1.5 text-xs transition-colors ${
-                                            colorirPor === opcao.campo && !indisponivel
-                                                ? "bg-[#1e6fd9] text-white"
-                                                : "text-white/60 hover:text-white disabled:opacity-30 disabled:hover:text-white/60"
-                                        }`}
-                                    >
-                                        {opcao.label}
-                                    </button>
-                                );
-                            })}
-                        </div>
+                                    return (
+                                        <button
+                                            key={opcao.campo}
+                                            type="button"
+                                            onClick={() => setColorirPor(opcao.campo)}
+                                            disabled={indisponivel}
+                                            title={indisponivel ? "Sambizanga não tem o campo Validação" : undefined}
+                                            className={`flex-1 rounded-md py-1.5 text-xs transition-colors ${
+                                                colorirPor === opcao.campo && !indisponivel
+                                                    ? "bg-[#1e6fd9] text-white"
+                                                    : "text-white/60 hover:text-white disabled:opacity-30 disabled:hover:text-white/60"
+                                            }`}
+                                        >
+                                            {opcao.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="flex rounded-lg bg-[#0e2242] p-1">
+                                <button
+                                    type="button"
+                                    disabled
+                                    className="flex-1 rounded-md py-1.5 text-xs bg-[#1e6fd9] text-white cursor-default"
+                                >
+                                    Estado
+                                </button>
+                            </div>
+                        )}
 
                         <p className="mt-2 text-[11px] text-white/40 leading-snug">
                             Em <strong className="font-semibold text-white/60">Webmap</strong> usam-se as cores definidas no

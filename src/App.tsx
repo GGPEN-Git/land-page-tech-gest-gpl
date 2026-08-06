@@ -50,7 +50,7 @@ export function App() {
     }
 
     if (view === "dashboard") {
-        return <Dashboard utilizador={utilizador} onLogout={sair} />;
+        return <Dashboard utilizador={utilizador} onLogout={sair} papel={utilizador?.papel} />;
     }
 
     return (
