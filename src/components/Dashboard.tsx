@@ -580,7 +580,7 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                             </>
                         )}
 
-                        {!mostraValidacao && temValidacao && (
+                        {papel === "admin" && !mostraValidacao && temValidacao && (
                             <>
                                 <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mt-8 mb-3">
                                     Validação
