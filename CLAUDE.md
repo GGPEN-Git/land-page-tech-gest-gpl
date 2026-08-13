@@ -115,6 +115,15 @@ Os renderers originais são guardados em `renderersOriginaisRef` na primeira vez
 
 O que continua a vir do código é a **lista de valores contados** (`0`, `1`, `2`). Um valor novo no domínio não é contado até ser acrescentado a `ESTADOS`/`VALIDACOES`.
 
+### Modo Controlo
+
+Quarto modo do seletor, **só para admin**. Ao contrário dos outros, `Controlo` **não é um campo do ArcGIS**: a marcação vive na tabela `verificacoes` do nosso Postgres, porque a aplicação lê os serviços anonimamente e não tem permissão de escrita no portal.
+
+- Chave durável: `GlobalId` (sobrevive a republicações). O `objectid` é guardado à parte porque é o que o mapa usa para destacar, e pode mudar se a camada for republicada.
+- O destaque visual é um `FeatureEffect` no `layerView`, **não um renderer** — não há campo por que colorir. Verificados ficam realçados, os restantes esbatidos.
+- Só está disponível com **uma área escolhida**: com as duas camadas somadas não haveria a que camada atribuir a marcação.
+- As contagens intersetam a lista de verificados com o filtro em vigor, do lado do servidor (`queryFeatureCount` com `objectIds`).
+
 Por isso `MapaArcGIS` faz `load()` em **todas** as camadas configuradas: sem estarem carregadas, `layer.renderer` ainda não existe e não há nada para ler.
 
 **O que reflete automaticamente do ArcGIS Online:** dados (registos, atributos), simbologia no modo Webmap, mapa de fundo, enquadramento inicial, e camadas acrescentadas ao webmap (são desenhadas, mas só entram em filtros e contagens depois de registadas em `CAMADAS`).
@@ -189,6 +198,7 @@ Alterar palavra-passe, papel ou desativar **apaga as sessões abertas** desse ut
 | `server/rotas.js` | `POST/GET/DELETE /api/sessao` e a trava de tentativas |
 | `src/lib/api.ts` | Cliente do frontend; todos os pedidos com `credentials: "include"` |
 | `components/MenuConta.tsx` | Menu da conta na barra do dashboard |
+| `verificacoes` (tabela) | Controlo de polígonos verificados; `GET/PUT /api/controlo` |
 | `components/Utilizadores.tsx` | Painel de funcionários e acessos (só admin) |
 | `components/AlterarPalavraPasse.tsx` | Alteração da própria palavra-passe |
 

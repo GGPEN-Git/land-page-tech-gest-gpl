@@ -4,20 +4,24 @@ import { ChevronDown, ChevronLeft, ChevronRight, Home, Minus, Plus, RotateCcw } 
 import type MapView from "@arcgis/core/views/MapView";
 import type Viewpoint from "@arcgis/core/Viewpoint";
 import type FeatureLayer from "@arcgis/core/layers/FeatureLayer";
+import FeatureEffect from "@arcgis/core/layers/support/FeatureEffect";
+import FeatureFilter from "@arcgis/core/layers/support/FeatureFilter";
 import { MapaArcGIS } from "./MapaArcGIS";
 import { Utilizadores } from "./Utilizadores";
 import { MenuConta } from "./MenuConta";
 import { AlterarPalavraPasse } from "./AlterarPalavraPasse";
 import { asset } from "../lib/utils";
 import { criarRenderer, lerLegenda } from "../lib/simbologia";
-import type { Papel, Utilizador } from "../lib/api";
+import { listarVerificacoes, marcarVerificacao, type Papel, type Utilizador } from "../lib/api";
 import {
     AREAS,
     CAMADAS,
     CAMADAS_EDIFICIOS,
     CAMPO_AOI,
     CAMPO_ESTADO,
+    CAMPO_GLOBAL_ID,
     CAMPO_VALIDACAO,
+    CONTROLO,
     ESTADOS,
     FILTROS,
     VALIDACOES,
@@ -50,7 +54,9 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
      * Online — assim qualquer alteração feita no portal aparece aqui sem tocar no código.
      * Por omissão usa-se "Estado" para o utilizador ver imediatamente a coloração por estado.
      */
-    const [colorirPor, setColorirPor] = useState<"webmap" | typeof CAMPO_VALIDACAO | typeof CAMPO_ESTADO>(CAMPO_ESTADO);
+    const [colorirPor, setColorirPor] = useState<
+        "webmap" | "controlo" | typeof CAMPO_VALIDACAO | typeof CAMPO_ESTADO
+    >(CAMPO_ESTADO);
 
     // Força "Estado" para utilizadores não-admin e impede alteração.
     useEffect(() => {
@@ -58,6 +64,15 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
             setColorirPor(CAMPO_ESTADO);
         }
     }, [papel, colorirPor]);
+
+    const emControlo = colorirPor === "controlo" && papel === "admin";
+
+    /** Objectids já marcados como verificados na camada ativa. */
+    const [verificados, setVerificados] = useState<number[]>([]);
+    /** Contagens do modo Controlo, já restringidas pelos filtros em vigor. */
+    const [totalFiltrado, setTotalFiltrado] = useState<number | null>(null);
+    const [verificadosNoFiltro, setVerificadosNoFiltro] = useState<number | null>(null);
+    const [aMarcar, setAMarcar] = useState(false);
 
     const [opcoes, setOpcoes] = useState<Record<string, string[]>>({});
     const [contagens, setContagens] = useState<Record<number, number>>({});
@@ -89,13 +104,18 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
 
     const camadasProntas = configsAtivas.every((c) => camadas[c.id]);
 
+    /** O controlo é por camada: com as duas somadas não haveria a quem atribuir a marcação. */
+    const podeControlo = papel === "admin" && configsAtivas.length === 1;
+    const configControlo = podeControlo ? configsAtivas[0] : null;
+
     // Validação só existe na camada de Boavista; com Sambizanga em cena não é opção.
     const podeValidacao = configsAtivas.every((c) => c.campoSimbologia === CAMPO_VALIDACAO);
     const temValidacao = configsAtivas.some((c) => c.campoSimbologia === CAMPO_VALIDACAO);
 
     // O cartão mostra sempre o campo por que o mapa está pintado. Com a simbologia
     // do webmap, esse campo é o `campoSimbologia` declarado para a camada.
-    const mostraValidacao = podeValidacao && (colorirPor === "webmap" || colorirPor === CAMPO_VALIDACAO);
+    const mostraValidacao =
+        !emControlo && podeValidacao && (colorirPor === "webmap" || colorirPor === CAMPO_VALIDACAO);
 
     const principais = mostraValidacao ? VALIDACOES : ESTADOS;
     const contagensPrincipais = mostraValidacao ? validacoes : contagens;
@@ -129,6 +149,153 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [camadas, chaveCamadas]);
 
+    /** Recarrega a lista de verificados da camada em controlo. */
+    const recarregarVerificacoes = useCallback(async () => {
+        if (!configControlo) {
+            setVerificados([]);
+            return;
+        }
+
+        try {
+            const { verificacoes } = await listarVerificacoes(configControlo.id);
+            setVerificados(verificacoes.map((v) => v.objectid));
+        } catch (e) {
+            console.error("Falha ao obter as verificações:", e);
+            setVerificados([]);
+        }
+    }, [configControlo]);
+
+    useEffect(() => {
+        if (!emControlo) return;
+
+        recarregarVerificacoes();
+    }, [emControlo, recarregarVerificacoes]);
+
+    /**
+     * Destaque visual do controlo. Não pode ser um renderer: a marcação não é
+     * um campo do ArcGIS. Usa-se um featureEffect, que esbate o que não está na lista.
+     */
+    useEffect(() => {
+        const view = viewRef.current;
+        const layer = configControlo ? camadas[configControlo.id] : null;
+        if (!view || !layer) return;
+
+        let cancelado = false;
+
+        view.whenLayerView(layer)
+            .then((layerView) => {
+                if (cancelado) return;
+
+                if (!emControlo) {
+                    layerView.featureEffect = null as unknown as FeatureEffect;
+                    return;
+                }
+
+                layerView.featureEffect = new FeatureEffect({
+                    // Sem nenhum verificado, "1=0" garante que nada é incluído;
+                    // uma lista vazia de objectIds seria interpretada como "sem filtro".
+                    filter: verificados.length
+                        ? new FeatureFilter({ objectIds: verificados })
+                        : new FeatureFilter({ where: "1=0" }),
+                    includedEffect: "drop-shadow(0 0 3px #16a34a) saturate(160%)",
+                    excludedEffect: "grayscale(85%) opacity(40%)",
+                });
+            })
+            .catch((e) => console.debug("Sem layerView para o controlo:", e));
+
+        return () => {
+            cancelado = true;
+        };
+    }, [camadas, configControlo, emControlo, verificados]);
+
+    /** Clicar num polígono alterna a sua marcação. */
+    useEffect(() => {
+        const view = viewRef.current;
+        const layer = configControlo ? camadas[configControlo.id] : null;
+        if (!view || !layer || !emControlo) return;
+
+        const handle = view.on("click", async (evento) => {
+            try {
+                const resposta = await view.hitTest(evento, { include: [layer] });
+                const acerto = resposta.results.find((r) => r.type === "graphic");
+                const atributos = acerto && "graphic" in acerto ? acerto.graphic.attributes : null;
+                if (!atributos) return;
+
+                const objectid = Number(atributos[layer.objectIdField]);
+                const globalId = atributos[CAMPO_GLOBAL_ID];
+
+                if (!Number.isInteger(objectid) || !globalId) {
+                    setErro("Este polígono não tem identificador utilizável.");
+                    return;
+                }
+
+                const jaVerificado = verificados.includes(objectid);
+
+                setAMarcar(true);
+                await marcarVerificacao(configControlo!.id, String(globalId), {
+                    objectid,
+                    verificado: !jaVerificado,
+                });
+
+                // Atualização local imediata; a lista completa é reposta a seguir.
+                setVerificados((atual) =>
+                    jaVerificado ? atual.filter((id) => id !== objectid) : [...atual, objectid],
+                );
+                setErro(null);
+            } catch (e) {
+                console.error("Falha ao marcar o polígono:", e);
+                setErro("Não foi possível gravar a verificação.");
+            } finally {
+                setAMarcar(false);
+            }
+        });
+
+        return () => handle.remove();
+    }, [camadas, configControlo, emControlo, verificados]);
+
+    /** Contagens do controlo, restringidas pelos filtros em vigor. */
+    useEffect(() => {
+        if (!emControlo || !configControlo) {
+            setTotalFiltrado(null);
+            setVerificadosNoFiltro(null);
+            return;
+        }
+
+        const layer = camadas[configControlo.id];
+        if (!layer) return;
+
+        let cancelado = false;
+
+        const efetivas = area?.aoi ? { ...selecoes, [CAMPO_AOI]: area.aoi } : selecoes;
+        const clausula = configControlo.filtroBase
+            ? comCondicao(construirWhere(efetivas), configControlo.filtroBase)
+            : construirWhere(efetivas);
+
+        async function contar() {
+            try {
+                const total = await layer.queryFeatureCount({ where: clausula });
+
+                // Interseta a lista de verificados com o filtro atual, do lado do servidor.
+                const dentro = verificados.length
+                    ? await layer.queryFeatureCount({ where: clausula, objectIds: verificados })
+                    : 0;
+
+                if (cancelado) return;
+
+                setTotalFiltrado(total);
+                setVerificadosNoFiltro(dentro);
+            } catch (e) {
+                console.debug("Falha ao contar verificações:", e);
+            }
+        }
+
+        contar();
+
+        return () => {
+            cancelado = true;
+        };
+    }, [emControlo, configControlo, camadas, area, selecoes, verificados]);
+
     // Substitui o renderer do webmap quando se escolhe um campo; "webmap" repõe o original.
     useEffect(() => {
         for (const config of configsAtivas) {
@@ -140,7 +307,9 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                 renderersOriginaisRef.current[config.id] = layer.renderer;
             }
 
-            if (colorirPor === "webmap") {
+            // Em controlo mantém-se a simbologia do portal: o que distingue os
+            // polígonos é o featureEffect, não a cor de preenchimento.
+            if (colorirPor === "webmap" || colorirPor === "controlo") {
                 layer.renderer = renderersOriginaisRef.current[config.id];
                 continue;
             }
@@ -520,9 +689,17 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                                         { campo: "webmap", label: "Webmap" },
                                         { campo: CAMPO_ESTADO, label: "Estado" },
                                         { campo: CAMPO_VALIDACAO, label: "Validação" },
+                                        { campo: "controlo", label: "Controlo" },
                                     ] as const
                                 ).map((opcao) => {
-                                    const indisponivel = opcao.campo === CAMPO_VALIDACAO && !podeValidacao;
+                                    const indisponivel =
+                                        (opcao.campo === CAMPO_VALIDACAO && !podeValidacao) ||
+                                        (opcao.campo === "controlo" && !podeControlo);
+
+                                    const motivo =
+                                        opcao.campo === CAMPO_VALIDACAO
+                                            ? "Sambizanga não tem o campo Validação"
+                                            : "Escolha uma área — o controlo é por camada";
 
                                     return (
                                         <button
@@ -530,7 +707,7 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                                             type="button"
                                             onClick={() => setColorirPor(opcao.campo)}
                                             disabled={indisponivel}
-                                            title={indisponivel ? "Sambizanga não tem o campo Validação" : undefined}
+                                            title={indisponivel ? motivo : undefined}
                                             className={`flex-1 rounded-md py-1.5 text-xs transition-colors ${
                                                 colorirPor === opcao.campo && !indisponivel
                                                     ? "bg-[#1e6fd9] text-white"
@@ -552,6 +729,14 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                                     Estado
                                 </button>
                             </div>
+                        )}
+
+                        {emControlo && (
+                            <p className="mt-3 rounded-md bg-[#1a4d2e]/30 border border-[#5dd618]/20 px-3 py-2 text-[11px] text-[#b6e9a0] leading-snug">
+                                Clique num polígono do mapa para o marcar como verificado. Clique de novo para retirar a
+                                marca. Os verificados ficam destacados; os restantes esbatidos.
+                                {aMarcar && <span className="block mt-1 text-white/60">A gravar…</span>}
+                            </p>
                         )}
 
                         {/* O bloco secundário mostra o que não estiver no cartão principal. */}
@@ -681,25 +866,51 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                         </div>
 
                         <div className="px-5 py-4 space-y-2">
-                            {principais.map((item) => (
-                                <div key={item.valor} className="flex items-center gap-3">
-                                    <span
-                                        className="w-4 h-4 rounded shrink-0"
-                                        style={{ backgroundColor: coresMapa[String(item.valor)] || item.cor }}
-                                        aria-hidden="true"
-                                    />
+                            {emControlo
+                                ? [
+                                      { chave: "verificado", ...CONTROLO.verificado, total: verificadosNoFiltro },
+                                      {
+                                          chave: "porVerificar",
+                                          ...CONTROLO.porVerificar,
+                                          total:
+                                              totalFiltrado === null || verificadosNoFiltro === null
+                                                  ? null
+                                                  : totalFiltrado - verificadosNoFiltro,
+                                      },
+                                  ].map((item) => (
+                                      <div key={item.chave} className="flex items-center gap-3">
+                                          <span
+                                              className="w-4 h-4 rounded shrink-0"
+                                              style={{ backgroundColor: item.cor }}
+                                              aria-hidden="true"
+                                          />
 
-                                    <span className="text-white text-sm flex-1">
-                                        {rotulosMapa[String(item.valor)] || item.label}
-                                    </span>
+                                          <span className="text-white text-sm flex-1">{item.label}</span>
 
-                                    <span className="bg-[#0e2242] rounded-md px-3 py-1 min-w-[70px] text-center text-white text-base font-bold">
-                                        {contagensPrincipais[item.valor] === undefined
-                                            ? "—"
-                                            : formatarNumero(contagensPrincipais[item.valor])}
-                                    </span>
-                                </div>
-                            ))}
+                                          <span className="bg-[#0e2242] rounded-md px-3 py-1 min-w-[70px] text-center text-white text-base font-bold">
+                                              {item.total === null ? "—" : formatarNumero(item.total)}
+                                          </span>
+                                      </div>
+                                  ))
+                                : principais.map((item) => (
+                                      <div key={item.valor} className="flex items-center gap-3">
+                                          <span
+                                              className="w-4 h-4 rounded shrink-0"
+                                              style={{ backgroundColor: coresMapa[String(item.valor)] || item.cor }}
+                                              aria-hidden="true"
+                                          />
+
+                                          <span className="text-white text-sm flex-1">
+                                              {rotulosMapa[String(item.valor)] || item.label}
+                                          </span>
+
+                                          <span className="bg-[#0e2242] rounded-md px-3 py-1 min-w-[70px] text-center text-white text-base font-bold">
+                                              {contagensPrincipais[item.valor] === undefined
+                                                  ? "—"
+                                                  : formatarNumero(contagensPrincipais[item.valor])}
+                                          </span>
+                                      </div>
+                                  ))}
                         </div>
                     </div>
                 </div>

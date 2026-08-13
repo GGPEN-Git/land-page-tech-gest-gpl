@@ -127,6 +127,51 @@ rotas.delete("/sessao", async (req, res) => {
     res.status(204).end();
 });
 
+// ── Controlo de verificação dos polígonos (só admin) ─────────────────────
+
+/** Lista o que já foi verificado numa camada. */
+rotas.get("/controlo/:camadaId", exigirSessao, exigirAdmin, async (req, res) => {
+    const linhas = await consultar(
+        `select v.global_id, v.objectid, v.verificado, v.atualizado_em, u.nome as utilizador
+           from verificacoes v
+      left join utilizadores u on u.id = v.utilizador_id
+          where v.camada_id = $1
+            and v.verificado = true
+       order by v.atualizado_em desc`,
+        [req.params.camadaId],
+    );
+
+    res.json({ verificacoes: linhas });
+});
+
+/** Marca ou desmarca um polígono. O objectid vem do cliente porque só o mapa o conhece. */
+rotas.put("/controlo/:camadaId/:globalId", exigirSessao, exigirAdmin, async (req, res) => {
+    const { camadaId, globalId } = req.params;
+    const verificado = req.body?.verificado !== false;
+    const objectid = Number(req.body?.objectid);
+    const nota = req.body?.nota ? String(req.body.nota).slice(0, 500) : null;
+
+    if (!Number.isInteger(objectid)) {
+        res.status(400).json({ erro: "objectid inválido." });
+        return;
+    }
+
+    const [registo] = await consultar(
+        `insert into verificacoes (camada_id, global_id, objectid, verificado, nota, utilizador_id)
+              values ($1, $2, $3, $4, $5, $6)
+         on conflict (camada_id, global_id) do update
+                set verificado = excluded.verificado,
+                    objectid = excluded.objectid,
+                    nota = excluded.nota,
+                    utilizador_id = excluded.utilizador_id,
+                    atualizado_em = now()
+          returning global_id, objectid, verificado, atualizado_em`,
+        [camadaId, globalId, objectid, verificado, nota, req.utilizador.id],
+    );
+
+    res.json({ verificacao: registo });
+});
+
 // ── A própria conta ──────────────────────────────────────────────────────
 
 /** Alterar a própria palavra-passe. Exige a atual, mesmo com sessão válida. */

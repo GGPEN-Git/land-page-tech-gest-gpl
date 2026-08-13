@@ -14,6 +14,17 @@ const BASE = "https://services-eu1.arcgis.com/7r9gTPdSG9MPi1LZ/arcgis/rest/servi
 export const CAMPO_ESTADO = "Estado";
 export const CAMPO_VALIDACAO = "Validacao";
 export const CAMPO_AOI = "AOI";
+/** Identificador estável de cada polígono; sobrevive a republicações da camada. */
+export const CAMPO_GLOBAL_ID = "GlobalId";
+
+/**
+ * Modo de controlo: não é um campo do ArcGIS, é estado nosso, guardado no Postgres.
+ * Os serviços são lidos anonimamente e não temos permissão para lá escrever.
+ */
+export const CONTROLO = {
+    verificado: { label: "Verificados", cor: "#16a34a" },
+    porVerificar: { label: "Por verificar", cor: "#9ca3af" },
+} as const;
 
 export interface CamadaConfig {
     id: string;

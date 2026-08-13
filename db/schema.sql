@@ -34,3 +34,22 @@ create table if not exists sessoes (
 
 create index if not exists sessoes_utilizador_idx on sessoes (utilizador_id);
 create index if not exists sessoes_expira_idx on sessoes (expira_em);
+
+-- Controlo de verificação dos polígonos.
+--
+-- Vive aqui e não no ArcGIS porque a aplicação lê os serviços de forma anónima,
+-- sem permissão de escrita. A chave é o GlobalId, que sobrevive a republicações
+-- da camada; o objectid é guardado à parte por ser o que o mapa usa para
+-- destacar feições, e pode mudar se a camada for republicada.
+create table if not exists verificacoes (
+    camada_id     text        not null,
+    global_id     text        not null,
+    objectid      integer     not null,
+    verificado    boolean     not null default true,
+    nota          text,
+    utilizador_id uuid        references utilizadores(id) on delete set null,
+    atualizado_em timestamptz not null default now(),
+    primary key (camada_id, global_id)
+);
+
+create index if not exists verificacoes_camada_idx on verificacoes (camada_id) where verificado;
