@@ -85,6 +85,13 @@ export function MapaArcGIS({ className = "absolute inset-0", onViewReady, onCama
                 // e a legenda não o consegue ler.
                 await Promise.all(Object.values(porId).map((camada) => camada.load().catch(() => null)));
 
+                // As camadas que vêm do webmap trazem os outFields configurados no portal,
+                // normalmente só os do popup. Sem "*", o hitTest devolve feições sem
+                // GlobalId e o modo Controlo não consegue identificar o polígono clicado.
+                for (const camada of Object.values(porId)) {
+                    camada.outFields = ["*"];
+                }
+
                 if (!porId[CAMADA_DADOS.id]) console.warn("Camada de dados ausente:", CAMADA_DADOS.url);
 
                 if (!cancelado) onCamadas?.(porId);

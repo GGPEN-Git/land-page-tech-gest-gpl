@@ -73,6 +73,8 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
     const [totalFiltrado, setTotalFiltrado] = useState<number | null>(null);
     const [verificadosNoFiltro, setVerificadosNoFiltro] = useState<number | null>(null);
     const [aMarcar, setAMarcar] = useState(false);
+    /** Mensagem sobre o mapa, para o resultado do clique não ficar escondido na aba. */
+    const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
 
     const [opcoes, setOpcoes] = useState<Record<string, string[]>>({});
     const [contagens, setContagens] = useState<Record<number, number>>({});
@@ -214,6 +216,12 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
         const layer = configControlo ? camadas[configControlo.id] : null;
         if (!view || !layer || !emControlo) return;
 
+        // Em controlo o clique serve para marcar, não para ver atributos:
+        // com o popup aberto o utilizador nem percebe que a marcação aconteceu.
+        const popupAntes = view.popupEnabled;
+        view.popupEnabled = false;
+        view.closePopup();
+
         const handle = view.on("click", async (evento) => {
             try {
                 const resposta = await view.hitTest(evento, { include: [layer] });
@@ -225,7 +233,7 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                 const globalId = atributos[CAMPO_GLOBAL_ID];
 
                 if (!Number.isInteger(objectid) || !globalId) {
-                    setErro("Este polígono não tem identificador utilizável.");
+                    setAviso({ tipo: "erro", texto: "Este polígono não tem identificador utilizável." });
                     return;
                 }
 
@@ -241,17 +249,35 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                 setVerificados((atual) =>
                     jaVerificado ? atual.filter((id) => id !== objectid) : [...atual, objectid],
                 );
-                setErro(null);
+
+                setAviso({
+                    tipo: "ok",
+                    texto: jaVerificado ? "Marca de verificação retirada." : "Polígono marcado como verificado.",
+                });
             } catch (e) {
                 console.error("Falha ao marcar o polígono:", e);
-                setErro("Não foi possível gravar a verificação.");
+                setAviso({
+                    tipo: "erro",
+                    texto: e instanceof Error ? e.message : "Não foi possível gravar a verificação.",
+                });
             } finally {
                 setAMarcar(false);
             }
         });
 
-        return () => handle.remove();
+        return () => {
+            handle.remove();
+            view.popupEnabled = popupAntes;
+        };
     }, [camadas, configControlo, emControlo, verificados]);
+
+    // O aviso do controlo desaparece sozinho ao fim de alguns segundos.
+    useEffect(() => {
+        if (!aviso) return;
+
+        const temporizador = setTimeout(() => setAviso(null), 4000);
+        return () => clearTimeout(temporizador);
+    }, [aviso]);
 
     /** Contagens do controlo, restringidas pelos filtros em vigor. */
     useEffect(() => {
@@ -857,6 +883,24 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                             <Home className="w-5 h-5" />
                         </button>
                     </div>
+
+                    {/* Resultado do clique em modo Controlo, por cima do mapa */}
+                    {emControlo && (aviso || aMarcar) && (
+                        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 max-w-[90%]">
+                            <p
+                                role="status"
+                                className={`rounded-lg px-4 py-2 text-sm shadow-lg backdrop-blur-sm ${
+                                    aMarcar
+                                        ? "bg-[#0b1c38]/95 text-white/80"
+                                        : aviso?.tipo === "ok"
+                                          ? "bg-[#1a4d2e] text-white"
+                                          : "bg-[#5c1414] text-[#f0c8c8]"
+                                }`}
+                            >
+                                {aMarcar ? "A gravar…" : aviso?.texto}
+                            </p>
+                        </div>
+                    )}
 
                     {/* Legenda do que está desenhado no mapa */}
                     <div className="absolute bottom-10 right-6 z-10 w-[270px] max-w-[calc(100%-3rem)] bg-[#0b1c38]/95 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden">
