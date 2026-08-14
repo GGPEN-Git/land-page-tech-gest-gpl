@@ -127,12 +127,21 @@ Atenção ao `filtroBase`: um edifício criado sem `AOI = 'Boavista'` fica invis
 
 ### Modo Controlo
 
-Quarto modo do seletor, **só para admin**. Ao contrário dos outros, `Controlo` **não é um campo do ArcGIS**: a marcação vive na tabela `verificacoes` do nosso Postgres, porque a aplicação lê os serviços anonimamente e não tem permissão de escrita no portal.
+Quarto modo do seletor, **só para admin**. Grava no campo **`GGPEN_Controlo`** da camada, um inteiro editável **sem domínio definido no portal** — os códigos são convenção nossa, em `arcgis.ts`:
 
-- Chave durável: `GlobalId` (sobrevive a republicações). O `objectid` é guardado à parte porque é o que o mapa usa para destacar, e pode mudar se a camada for republicada.
-- O destaque visual é um `FeatureEffect` no `layerView`, **não um renderer** — não há campo por que colorir. Verificados ficam realçados, os restantes esbatidos.
-- Só está disponível com **uma área escolhida**: com as duas camadas somadas não haveria a que camada atribuir a marcação.
-- As contagens intersetam a lista de verificados com o filtro em vigor, do lado do servidor (`queryFeatureCount` com `objectIds`).
+| Valor | Estado |
+|---|---|
+| `1` | Validado |
+| `2` | Não validado |
+| `0` ou `null` | Por verificar |
+
+Como a esmagadora maioria dos registos está a `null`, "Por verificar" é o **símbolo por omissão** do renderer e a sua contagem usa `condicaoControlo()`, que apanha zero e nulo.
+
+Clicar seleciona; a gravação é por botão, com `applyEdits`. Escreve no ArcGIS Online — é, com o `ModuloEdicao`, a única parte da aplicação que o faz.
+
+Só aparece com **uma área escolhida** e se a camada declarar o campo (Sambizanga não o tem).
+
+**Se o portal vier a atribuir um domínio a este campo, os códigos têm de coincidir.**
 
 Por isso `MapaArcGIS` faz `load()` em **todas** as camadas configuradas: sem estarem carregadas, `layer.renderer` ainda não existe e não há nada para ler.
 

@@ -1,8 +1,7 @@
 import UniqueValueRenderer from "@arcgis/core/renderers/UniqueValueRenderer";
-import SimpleRenderer from "@arcgis/core/renderers/SimpleRenderer";
 import SimpleFillSymbol from "@arcgis/core/symbols/SimpleFillSymbol";
 import SimpleLineSymbol from "@arcgis/core/symbols/SimpleLineSymbol";
-import { COR_POR_OMISSAO, type ContagemConfig } from "./arcgis";
+import { CAMPO_CONTROLO, COR_POR_OMISSAO, CONTROLOS, VALOR_POR_VERIFICAR, type ContagemConfig } from "./arcgis";
 
 function preenchimento(cor: string) {
     return new SimpleFillSymbol({
@@ -73,17 +72,24 @@ export function lerLegenda(renderer: unknown): LegendaLida {
 }
 
 /**
- * Simbologia do modo Controlo: contorno grosso e bem contrastado sobre imagem
- * de satélite. Aqui não há campo por que colorir — o que distingue verificados
- * dos restantes é o featureEffect, e por isso os polígonos precisam de ser
- * legíveis à partida.
+ * Simbologia do modo Controlo, por `GGPEN_Controlo`.
+ *
+ * "Por verificar" vai no símbolo por omissão e não como valor único: o campo
+ * está a `null` na maioria dos registos, e um valor único de "0" não os apanharia.
  */
 export function criarRendererControlo() {
-    return new SimpleRenderer({
-        symbol: new SimpleFillSymbol({
-            color: [255, 255, 255, 0.08],
-            outline: new SimpleLineSymbol({ color: "#ffd166", width: 1.4 }),
-        }),
+    const porVerificar = CONTROLOS.find((c) => c.valor === VALOR_POR_VERIFICAR);
+    const atribuidos = CONTROLOS.filter((c) => c.valor !== VALOR_POR_VERIFICAR);
+
+    return new UniqueValueRenderer({
+        field: CAMPO_CONTROLO,
+        defaultSymbol: preenchimento(porVerificar?.cor || COR_POR_OMISSAO),
+        defaultLabel: porVerificar?.label || "Por verificar",
+        uniqueValueInfos: atribuidos.map((c) => ({
+            value: String(c.valor),
+            label: c.label,
+            symbol: preenchimento(c.cor),
+        })),
     });
 }
 

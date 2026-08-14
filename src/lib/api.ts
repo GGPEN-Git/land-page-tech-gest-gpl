@@ -68,31 +68,6 @@ export function terminarSessao() {
     return pedir<void>("/sessao", { method: "DELETE" });
 }
 
-// ── Controlo de verificação dos polígonos. Só admin. ──
-
-export interface Verificacao {
-    global_id: string;
-    objectid: number;
-    verificado: boolean;
-    atualizado_em: string;
-    utilizador: string | null;
-}
-
-export function listarVerificacoes(camadaId: string) {
-    return pedir<{ verificacoes: Verificacao[] }>(`/controlo/${encodeURIComponent(camadaId)}`);
-}
-
-export function marcarVerificacao(
-    camadaId: string,
-    globalId: string,
-    dados: { objectid: number; verificado: boolean; nota?: string },
-) {
-    return pedir<{ verificacao: Verificacao }>(
-        `/controlo/${encodeURIComponent(camadaId)}/${encodeURIComponent(globalId)}`,
-        { method: "PUT", body: JSON.stringify(dados) },
-    );
-}
-
 // ── Gestão de utilizadores. Só responde a quem tem papel "admin". ──
 
 export function listarUtilizadores() {

@@ -17,16 +17,32 @@ export const CAMPO_AOI = "AOI";
 /** Identificador estável de cada polígono; sobrevive a republicações da camada. */
 export const CAMPO_GLOBAL_ID = "GlobalId";
 
+/** Campo do serviço onde fica o controlo de verificação. Inteiro, editável. */
+export const CAMPO_CONTROLO = "GGPEN_Controlo";
+
 /**
- * Modo de controlo: não é um campo do ArcGIS, é estado nosso, guardado no Postgres.
- * Os serviços são lidos anonimamente e não temos permissão para lá escrever.
+ * O campo não traz domínio definido no ArcGIS, por isso os códigos são
+ * convenção nossa. Se um dia lhe for atribuído um domínio no portal, estes
+ * valores têm de coincidir com os de lá.
+ *
+ * Registos por preencher ficam a `null` — daí "Por verificar" valer 0 **ou** nulo.
  */
-export const CONTROLO = {
-    verificado: { label: "Verificados", cor: "#16a34a" },
-    // Mesmo amarelo do contorno em `criarRendererControlo`, para a legenda
-    // corresponder ao que se vê no mapa.
-    porVerificar: { label: "Por verificar", cor: "#ffd166" },
-} as const;
+export const VALOR_POR_VERIFICAR = 0;
+export const VALOR_VALIDADO = 1;
+export const VALOR_NAO_VALIDADO = 2;
+
+export const CONTROLOS: ContagemConfig[] = [
+    { valor: VALOR_VALIDADO, label: "Validado", cor: "#16a34a" },
+    { valor: VALOR_NAO_VALIDADO, label: "Não validado", cor: "#dc2626" },
+    { valor: VALOR_POR_VERIFICAR, label: "Por verificar", cor: "#ffd166" },
+];
+
+/** "Por verificar" abrange o zero e o nulo; os restantes são comparação direta. */
+export function condicaoControlo(valor: number): string {
+    return valor === VALOR_POR_VERIFICAR
+        ? `(${CAMPO_CONTROLO} IS NULL OR ${CAMPO_CONTROLO} = ${VALOR_POR_VERIFICAR})`
+        : `${CAMPO_CONTROLO} = ${valor}`;
+}
 
 export interface CamadaConfig {
     id: string;

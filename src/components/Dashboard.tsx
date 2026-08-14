@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ChevronDown, ChevronLeft, ChevronRight, Home, Minus, Plus, RotateCcw, SquarePen } from "lucide-react";
+import Graphic from "@arcgis/core/Graphic";
 import type MapView from "@arcgis/core/views/MapView";
 import type Viewpoint from "@arcgis/core/Viewpoint";
 import type FeatureLayer from "@arcgis/core/layers/FeatureLayer";
-import FeatureEffect from "@arcgis/core/layers/support/FeatureEffect";
-import FeatureFilter from "@arcgis/core/layers/support/FeatureFilter";
 import { MapaArcGIS } from "./MapaArcGIS";
 import { Utilizadores } from "./Utilizadores";
 import { MenuConta } from "./MenuConta";
@@ -13,20 +12,23 @@ import { AlterarPalavraPasse } from "./AlterarPalavraPasse";
 import { ModuloEdicao } from "./ModuloEdicao";
 import { asset } from "../lib/utils";
 import { criarRenderer, criarRendererControlo, lerLegenda } from "../lib/simbologia";
-import { listarVerificacoes, marcarVerificacao, type Papel, type Utilizador } from "../lib/api";
+import type { Papel, Utilizador } from "../lib/api";
 import {
     AREAS,
     CAMADAS,
     CAMADAS_EDIFICIOS,
     CAMPO_AOI,
+    CAMPO_CONTROLO,
     CAMPO_ESTADO,
     CAMPO_GLOBAL_ID,
     CAMPO_VALIDACAO,
-    CONTROLO,
+    CONTROLOS,
     ESTADOS,
     FILTROS,
     VALIDACOES,
+    VALOR_POR_VERIFICAR,
     comCondicao,
+    condicaoControlo,
     construirWhere,
     formatarNumero,
 } from "../lib/arcgis";
@@ -68,18 +70,20 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
 
     const emControlo = colorirPor === "controlo" && papel === "admin";
 
-    /** Objectids já marcados como verificados na camada ativa. */
-    const [verificados, setVerificados] = useState<number[]>([]);
-    /** Contagens do modo Controlo, já restringidas pelos filtros em vigor. */
-    const [totalFiltrado, setTotalFiltrado] = useState<number | null>(null);
-    const [verificadosNoFiltro, setVerificadosNoFiltro] = useState<number | null>(null);
+    /** Contagens por valor de GGPEN_Controlo, respeitando os filtros. */
+    const [controlos, setControlos] = useState<Record<number, number>>({});
+    /** Incrementado depois de gravar, para as contagens voltarem a correr. */
+    const [recarga, setRecarga] = useState(0);
     const [aMarcar, setAMarcar] = useState(false);
     /** Mensagem sobre o mapa, para o resultado da ação não ficar escondido na aba. */
     const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
     /** Polígono clicado em modo Controlo. */
-    const [selecionado, setSelecionado] = useState<{ objectid: number; globalId: string; bairro: string | null } | null>(
-        null,
-    );
+    const [selecionado, setSelecionado] = useState<{
+        objectid: number;
+        globalId: string;
+        bairro: string | null;
+        controlo: number;
+    } | null>(null);
 
     const [opcoes, setOpcoes] = useState<Record<string, string[]>>({});
     const [contagens, setContagens] = useState<Record<number, number>>({});
@@ -113,13 +117,24 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
 
     const camadasProntas = configsAtivas.every((c) => camadas[c.id]);
 
-    /** O controlo é por camada: com as duas somadas não haveria a quem atribuir a marcação. */
-    const podeControlo = papel === "admin" && configsAtivas.length === 1;
+    /**
+     * O controlo é por camada — com as duas somadas não haveria onde escrever —
+     * e só existe nas camadas que declarem o campo GGPEN_Controlo.
+     */
+    const camadaUnica = configsAtivas.length === 1 ? camadas[configsAtivas[0].id] : null;
+    const temCampoControlo = !!camadaUnica?.fields?.some((c) => c.name === CAMPO_CONTROLO);
+    const podeControlo = papel === "admin" && configsAtivas.length === 1 && temCampoControlo;
     const configControlo = podeControlo ? configsAtivas[0] : null;
 
-    // Validação só existe na camada de Boavista; com Sambizanga em cena não é opção.
-    const podeValidacao = configsAtivas.every((c) => c.campoSimbologia === CAMPO_VALIDACAO);
-    const temValidacao = configsAtivas.some((c) => c.campoSimbologia === CAMPO_VALIDACAO);
+    /**
+     * A disponibilidade dos campos é lida das camadas, não da configuração:
+     * o portal pode acrescentar campos a qualquer momento, como aconteceu com
+     * `Validacao` e `GGPEN_Controlo` em Sambizanga.
+     */
+    const temCampo = (id: string, campo: string) => !!camadas[id]?.fields?.some((c) => c.name === campo);
+
+    const podeValidacao = camadasProntas && configsAtivas.every((c) => temCampo(c.id, CAMPO_VALIDACAO));
+    const temValidacao = configsAtivas.some((c) => temCampo(c.id, CAMPO_VALIDACAO));
 
     // O cartão mostra sempre o campo por que o mapa está pintado. Com a simbologia
     // do webmap, esse campo é o `campoSimbologia` declarado para a camada.
@@ -160,68 +175,7 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [camadas, chaveCamadas]);
 
-    /** Recarrega a lista de verificados da camada em controlo. */
-    const recarregarVerificacoes = useCallback(async () => {
-        if (!configControlo) {
-            setVerificados([]);
-            return;
-        }
-
-        try {
-            const { verificacoes } = await listarVerificacoes(configControlo.id);
-            setVerificados(verificacoes.map((v) => v.objectid));
-        } catch (e) {
-            console.error("Falha ao obter as verificações:", e);
-            setVerificados([]);
-        }
-    }, [configControlo]);
-
-    useEffect(() => {
-        if (!emControlo) return;
-
-        recarregarVerificacoes();
-    }, [emControlo, recarregarVerificacoes]);
-
-    /**
-     * Destaque visual do controlo. Não pode ser um renderer: a marcação não é
-     * um campo do ArcGIS. Usa-se um featureEffect, que esbate o que não está na lista.
-     */
-    useEffect(() => {
-        const view = viewRef.current;
-        const layer = configControlo ? camadas[configControlo.id] : null;
-        if (!view || !layer) return;
-
-        let cancelado = false;
-
-        view.whenLayerView(layer)
-            .then((layerView) => {
-                if (cancelado) return;
-
-                if (!emControlo) {
-                    layerView.featureEffect = null as unknown as FeatureEffect;
-                    return;
-                }
-
-                layerView.featureEffect = new FeatureEffect({
-                    // Sem nenhum verificado, "1=0" garante que nada é incluído;
-                    // uma lista vazia de objectIds seria interpretada como "sem filtro".
-                    filter: verificados.length
-                        ? new FeatureFilter({ objectIds: verificados })
-                        : new FeatureFilter({ where: "1=0" }),
-                    // Realça-se o verificado em vez de apagar o resto: no início nada
-                    // está verificado, e esbater tudo tornava o mapa ilegível.
-                    includedEffect: "drop-shadow(0 0 6px #16a34a) brightness(1.5) saturate(200%)",
-                    excludedEffect: "opacity(80%)",
-                });
-            })
-            .catch((e) => console.debug("Sem layerView para o controlo:", e));
-
-        return () => {
-            cancelado = true;
-        };
-    }, [camadas, configControlo, emControlo, verificados]);
-
-    /** Clicar num polígono alterna a sua marcação. */
+    /** Clicar num polígono seleciona-o para controlo. */
     useEffect(() => {
         const view = viewRef.current;
         const layer = configControlo ? camadas[configControlo.id] : null;
@@ -253,6 +207,7 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                     objectid,
                     globalId: String(globalId),
                     bairro: typeof atributos.Bairro === "string" ? atributos.Bairro : null,
+                    controlo: Number(atributos[CAMPO_CONTROLO]) || VALOR_POR_VERIFICAR,
                 });
                 setAviso(null);
             } catch (e) {
@@ -268,33 +223,42 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
         if (!emControlo) setSelecionado(null);
     }, [emControlo]);
 
-    /** Alterna a marcação do polígono selecionado. Chamada pelo botão, não pelo clique no mapa. */
-    async function alternarVerificacao() {
-        if (!selecionado || !configControlo) return;
-
-        const jaVerificado = verificados.includes(selecionado.objectid);
+    /** Grava o estado de controlo no campo GGPEN_Controlo do serviço. */
+    async function definirControlo(valor: number) {
+        const layer = configControlo ? camadas[configControlo.id] : null;
+        if (!selecionado || !layer) return;
 
         setAMarcar(true);
 
         try {
-            await marcarVerificacao(configControlo.id, selecionado.globalId, {
-                objectid: selecionado.objectid,
-                verificado: !jaVerificado,
+            const resultado = await layer.applyEdits({
+                updateFeatures: [
+                    new Graphic({
+                        attributes: {
+                            [layer.objectIdField]: selecionado.objectid,
+                            [CAMPO_CONTROLO]: valor,
+                        },
+                    }),
+                ],
             });
 
-            setVerificados((atual) =>
-                jaVerificado ? atual.filter((id) => id !== selecionado.objectid) : [...atual, selecionado.objectid],
-            );
+            const falha = resultado.updateFeatureResults?.[0]?.error;
+
+            if (falha) throw new Error(falha.message || "O serviço recusou a alteração.");
+
+            setSelecionado((atual) => (atual ? { ...atual, controlo: valor } : atual));
+            layer.refresh();
+            setRecarga((n) => n + 1);
 
             setAviso({
                 tipo: "ok",
-                texto: jaVerificado ? "Marca de verificação retirada." : "Polígono marcado como verificado.",
+                texto: `Marcado como "${CONTROLOS.find((c) => c.valor === valor)?.label}".`,
             });
         } catch (e) {
-            console.error("Falha ao marcar o polígono:", e);
+            console.error("Falha ao gravar o controlo:", e);
             setAviso({
                 tipo: "erro",
-                texto: e instanceof Error ? e.message : "Não foi possível gravar a verificação.",
+                texto: e instanceof Error ? e.message : "Não foi possível gravar no serviço.",
             });
         } finally {
             setAMarcar(false);
@@ -309,11 +273,10 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
         return () => clearTimeout(temporizador);
     }, [aviso]);
 
-    /** Contagens do controlo, restringidas pelos filtros em vigor. */
+    /** Contagens por estado de controlo, restringidas pelos filtros em vigor. */
     useEffect(() => {
         if (!emControlo || !configControlo) {
-            setTotalFiltrado(null);
-            setVerificadosNoFiltro(null);
+            setControlos({});
             return;
         }
 
@@ -329,19 +292,19 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
 
         async function contar() {
             try {
-                const total = await layer.queryFeatureCount({ where: clausula });
+                const totais = await Promise.all(
+                    CONTROLOS.map(
+                        async (c) =>
+                            [
+                                c.valor,
+                                await layer.queryFeatureCount({ where: comCondicao(clausula, condicaoControlo(c.valor)) }),
+                            ] as const,
+                    ),
+                );
 
-                // Interseta a lista de verificados com o filtro atual, do lado do servidor.
-                const dentro = verificados.length
-                    ? await layer.queryFeatureCount({ where: clausula, objectIds: verificados })
-                    : 0;
-
-                if (cancelado) return;
-
-                setTotalFiltrado(total);
-                setVerificadosNoFiltro(dentro);
+                if (!cancelado) setControlos(Object.fromEntries(totais));
             } catch (e) {
-                console.debug("Falha ao contar verificações:", e);
+                console.debug("Falha ao contar o controlo:", e);
             }
         }
 
@@ -350,7 +313,7 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
         return () => {
             cancelado = true;
         };
-    }, [emControlo, configControlo, camadas, area, selecoes, verificados]);
+    }, [emControlo, configControlo, camadas, area, selecoes, recarga]);
 
     // Substitui o renderer do webmap quando se escolhe um campo; "webmap" repõe o original.
     useEffect(() => {
@@ -759,8 +722,8 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
 
                                     const motivo =
                                         opcao.campo === CAMPO_VALIDACAO
-                                            ? "Sambizanga não tem o campo Validação"
-                                            : "Escolha uma área — o controlo é por camada";
+                                            ? "Alguma das camadas ativas não tem o campo Validação"
+                                            : "Escolha uma área — o controlo escreve numa camada de cada vez";
 
                                     return (
                                         <button
@@ -974,50 +937,41 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
 
                             <div className="px-5 py-4">
                                 {selecionado ? (
-                                    (() => {
-                                        const verificado = verificados.includes(selecionado.objectid);
+                                    <div className="space-y-2">
+                                        {CONTROLOS.map((opcao) => {
+                                            const atual = selecionado.controlo === opcao.valor;
 
-                                        return (
-                                            <>
-                                                <div className="flex items-center gap-3 mb-4">
+                                            return (
+                                                <button
+                                                    key={opcao.valor}
+                                                    type="button"
+                                                    onClick={() => definirControlo(opcao.valor)}
+                                                    disabled={aMarcar || atual}
+                                                    className={`w-full flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors ${
+                                                        atual
+                                                            ? "bg-white/15 text-white cursor-default"
+                                                            : "text-white/70 hover:bg-white/10 hover:text-white disabled:opacity-50"
+                                                    }`}
+                                                >
                                                     <span
                                                         className="w-4 h-4 rounded shrink-0"
-                                                        style={{
-                                                            backgroundColor: verificado
-                                                                ? CONTROLO.verificado.cor
-                                                                : CONTROLO.porVerificar.cor,
-                                                        }}
+                                                        style={{ backgroundColor: opcao.cor }}
                                                         aria-hidden="true"
                                                     />
 
-                                                    <span className="text-white text-sm">
-                                                        {verificado ? "Verificado" : "Por verificar"}
-                                                    </span>
-                                                </div>
+                                                    <span className="flex-1 text-left">{opcao.label}</span>
 
-                                                <button
-                                                    type="button"
-                                                    onClick={alternarVerificacao}
-                                                    disabled={aMarcar}
-                                                    className={`w-full rounded-md py-2 text-sm font-semibold transition-colors disabled:opacity-60 ${
-                                                        verificado
-                                                            ? "bg-white/10 text-white hover:bg-white/20"
-                                                            : "bg-[#16a34a] text-white hover:bg-[#15803d]"
-                                                    }`}
-                                                >
-                                                    {aMarcar
-                                                        ? "A gravar…"
-                                                        : verificado
-                                                          ? "Retirar marca"
-                                                          : "Marcar como verificado"}
+                                                    {atual && <span className="text-[11px] text-white/50">atual</span>}
                                                 </button>
-                                            </>
-                                        );
-                                    })()
+                                            );
+                                        })}
+
+                                        {aMarcar && <p className="text-[11px] text-white/50 pt-1">A gravar no serviço…</p>}
+                                    </div>
                                 ) : (
                                     <p className="text-white/50 text-xs leading-snug">
                                         Clique num polígono do mapa. Os detalhes abrem na janela habitual e o estado de
-                                        verificação aparece aqui.
+                                        controlo aparece aqui.
                                     </p>
                                 )}
                             </div>
@@ -1042,18 +996,8 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
 
                         <div className="px-5 py-4 space-y-2">
                             {emControlo
-                                ? [
-                                      { chave: "verificado", ...CONTROLO.verificado, total: verificadosNoFiltro },
-                                      {
-                                          chave: "porVerificar",
-                                          ...CONTROLO.porVerificar,
-                                          total:
-                                              totalFiltrado === null || verificadosNoFiltro === null
-                                                  ? null
-                                                  : totalFiltrado - verificadosNoFiltro,
-                                      },
-                                  ].map((item) => (
-                                      <div key={item.chave} className="flex items-center gap-3">
+                                ? CONTROLOS.map((item) => (
+                                      <div key={item.valor} className="flex items-center gap-3">
                                           <span
                                               className="w-4 h-4 rounded shrink-0"
                                               style={{ backgroundColor: item.cor }}
@@ -1063,7 +1007,9 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                                           <span className="text-white text-sm flex-1">{item.label}</span>
 
                                           <span className="bg-[#0e2242] rounded-md px-3 py-1 min-w-[70px] text-center text-white text-base font-bold">
-                                              {item.total === null ? "—" : formatarNumero(item.total)}
+                                              {controlos[item.valor] === undefined
+                                                  ? "—"
+                                                  : formatarNumero(controlos[item.valor])}
                                           </span>
                                       </div>
                                   ))
