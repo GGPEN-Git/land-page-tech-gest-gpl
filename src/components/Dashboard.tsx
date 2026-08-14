@@ -73,8 +73,12 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
     const [totalFiltrado, setTotalFiltrado] = useState<number | null>(null);
     const [verificadosNoFiltro, setVerificadosNoFiltro] = useState<number | null>(null);
     const [aMarcar, setAMarcar] = useState(false);
-    /** Mensagem sobre o mapa, para o resultado do clique não ficar escondido na aba. */
+    /** Mensagem sobre o mapa, para o resultado da ação não ficar escondido na aba. */
     const [aviso, setAviso] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
+    /** Polígono clicado em modo Controlo. */
+    const [selecionado, setSelecionado] = useState<{ objectid: number; globalId: string; bairro: string | null } | null>(
+        null,
+    );
 
     const [opcoes, setOpcoes] = useState<Record<string, string[]>>({});
     const [contagens, setContagens] = useState<Record<number, number>>({});
@@ -216,60 +220,79 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
         const layer = configControlo ? camadas[configControlo.id] : null;
         if (!view || !layer || !emControlo) return;
 
-        // Em controlo o clique serve para marcar, não para ver atributos:
-        // com o popup aberto o utilizador nem percebe que a marcação aconteceu.
-        const popupAntes = view.popupEnabled;
-        view.popupEnabled = false;
-        view.closePopup();
-
+        // O popup dos atributos fica como está: o clique seleciona, e a marcação
+        // é feita no painel de controlo, com um botão. Assim não há marcações por engano.
         const handle = view.on("click", async (evento) => {
             try {
                 const resposta = await view.hitTest(evento, { include: [layer] });
                 const acerto = resposta.results.find((r) => r.type === "graphic");
                 const atributos = acerto && "graphic" in acerto ? acerto.graphic.attributes : null;
-                if (!atributos) return;
+
+                if (!atributos) {
+                    setSelecionado(null);
+                    return;
+                }
 
                 const objectid = Number(atributos[layer.objectIdField]);
                 const globalId = atributos[CAMPO_GLOBAL_ID];
 
                 if (!Number.isInteger(objectid) || !globalId) {
+                    setSelecionado(null);
                     setAviso({ tipo: "erro", texto: "Este polígono não tem identificador utilizável." });
                     return;
                 }
 
-                const jaVerificado = verificados.includes(objectid);
-
-                setAMarcar(true);
-                await marcarVerificacao(configControlo!.id, String(globalId), {
+                setSelecionado({
                     objectid,
-                    verificado: !jaVerificado,
+                    globalId: String(globalId),
+                    bairro: typeof atributos.Bairro === "string" ? atributos.Bairro : null,
                 });
-
-                // Atualização local imediata; a lista completa é reposta a seguir.
-                setVerificados((atual) =>
-                    jaVerificado ? atual.filter((id) => id !== objectid) : [...atual, objectid],
-                );
-
-                setAviso({
-                    tipo: "ok",
-                    texto: jaVerificado ? "Marca de verificação retirada." : "Polígono marcado como verificado.",
-                });
+                setAviso(null);
             } catch (e) {
-                console.error("Falha ao marcar o polígono:", e);
-                setAviso({
-                    tipo: "erro",
-                    texto: e instanceof Error ? e.message : "Não foi possível gravar a verificação.",
-                });
-            } finally {
-                setAMarcar(false);
+                console.error("Falha ao ler o polígono:", e);
             }
         });
 
-        return () => {
-            handle.remove();
-            view.popupEnabled = popupAntes;
-        };
-    }, [camadas, configControlo, emControlo, verificados]);
+        return () => handle.remove();
+    }, [camadas, configControlo, emControlo]);
+
+    // Sair do modo de controlo limpa a seleção.
+    useEffect(() => {
+        if (!emControlo) setSelecionado(null);
+    }, [emControlo]);
+
+    /** Alterna a marcação do polígono selecionado. Chamada pelo botão, não pelo clique no mapa. */
+    async function alternarVerificacao() {
+        if (!selecionado || !configControlo) return;
+
+        const jaVerificado = verificados.includes(selecionado.objectid);
+
+        setAMarcar(true);
+
+        try {
+            await marcarVerificacao(configControlo.id, selecionado.globalId, {
+                objectid: selecionado.objectid,
+                verificado: !jaVerificado,
+            });
+
+            setVerificados((atual) =>
+                jaVerificado ? atual.filter((id) => id !== selecionado.objectid) : [...atual, selecionado.objectid],
+            );
+
+            setAviso({
+                tipo: "ok",
+                texto: jaVerificado ? "Marca de verificação retirada." : "Polígono marcado como verificado.",
+            });
+        } catch (e) {
+            console.error("Falha ao marcar o polígono:", e);
+            setAviso({
+                tipo: "erro",
+                texto: e instanceof Error ? e.message : "Não foi possível gravar a verificação.",
+            });
+        } finally {
+            setAMarcar(false);
+        }
+    }
 
     // O aviso do controlo desaparece sozinho ao fim de alguns segundos.
     useEffect(() => {
@@ -759,9 +782,8 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
 
                         {emControlo && (
                             <p className="mt-3 rounded-md bg-[#1a4d2e]/30 border border-[#5dd618]/20 px-3 py-2 text-[11px] text-[#b6e9a0] leading-snug">
-                                Clique num polígono do mapa para o marcar como verificado. Clique de novo para retirar a
-                                marca. Os verificados ficam destacados; os restantes esbatidos.
-                                {aMarcar && <span className="block mt-1 text-white/60">A gravar…</span>}
+                                Clique num polígono para ver os detalhes e o seu estado de verificação. A marcação faz-se
+                                no painel em baixo à esquerda. Os verificados ficam destacados no mapa.
                             </p>
                         )}
 
@@ -884,21 +906,82 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                         </button>
                     </div>
 
-                    {/* Resultado do clique em modo Controlo, por cima do mapa */}
-                    {emControlo && (aviso || aMarcar) && (
+                    {/* Aviso do controlo, por cima do mapa */}
+                    {emControlo && aviso && (
                         <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 max-w-[90%]">
                             <p
                                 role="status"
                                 className={`rounded-lg px-4 py-2 text-sm shadow-lg backdrop-blur-sm ${
-                                    aMarcar
-                                        ? "bg-[#0b1c38]/95 text-white/80"
-                                        : aviso?.tipo === "ok"
-                                          ? "bg-[#1a4d2e] text-white"
-                                          : "bg-[#5c1414] text-[#f0c8c8]"
+                                    aviso.tipo === "ok" ? "bg-[#1a4d2e] text-white" : "bg-[#5c1414] text-[#f0c8c8]"
                                 }`}
                             >
-                                {aMarcar ? "A gravar…" : aviso?.texto}
+                                {aviso.texto}
                             </p>
+                        </div>
+                    )}
+
+                    {/* Painel do polígono selecionado, ao lado do popup de atributos */}
+                    {emControlo && (
+                        <div className="absolute bottom-10 left-6 z-30 w-[280px] max-w-[calc(100%-3rem)] bg-[#0b1c38]/95 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden">
+                            <div className="bg-[#12294d] px-5 py-3">
+                                <p className="text-white/60 text-[11px] uppercase tracking-[0.15em]">Controlo</p>
+                                <p className="text-white text-sm font-medium truncate">
+                                    {selecionado ? `Polígono ${selecionado.objectid}` : "Nenhum polígono selecionado"}
+                                </p>
+                                {selecionado?.bairro && (
+                                    <p className="text-white/50 text-xs truncate">{selecionado.bairro}</p>
+                                )}
+                            </div>
+
+                            <div className="px-5 py-4">
+                                {selecionado ? (
+                                    (() => {
+                                        const verificado = verificados.includes(selecionado.objectid);
+
+                                        return (
+                                            <>
+                                                <div className="flex items-center gap-3 mb-4">
+                                                    <span
+                                                        className="w-4 h-4 rounded shrink-0"
+                                                        style={{
+                                                            backgroundColor: verificado
+                                                                ? CONTROLO.verificado.cor
+                                                                : CONTROLO.porVerificar.cor,
+                                                        }}
+                                                        aria-hidden="true"
+                                                    />
+
+                                                    <span className="text-white text-sm">
+                                                        {verificado ? "Verificado" : "Por verificar"}
+                                                    </span>
+                                                </div>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={alternarVerificacao}
+                                                    disabled={aMarcar}
+                                                    className={`w-full rounded-md py-2 text-sm font-semibold transition-colors disabled:opacity-60 ${
+                                                        verificado
+                                                            ? "bg-white/10 text-white hover:bg-white/20"
+                                                            : "bg-[#16a34a] text-white hover:bg-[#15803d]"
+                                                    }`}
+                                                >
+                                                    {aMarcar
+                                                        ? "A gravar…"
+                                                        : verificado
+                                                          ? "Retirar marca"
+                                                          : "Marcar como verificado"}
+                                                </button>
+                                            </>
+                                        );
+                                    })()
+                                ) : (
+                                    <p className="text-white/50 text-xs leading-snug">
+                                        Clique num polígono do mapa. Os detalhes abrem na janela habitual e o estado de
+                                        verificação aparece aqui.
+                                    </p>
+                                )}
+                            </div>
                         </div>
                     )}
 
