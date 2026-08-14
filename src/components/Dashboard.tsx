@@ -11,7 +11,7 @@ import { Utilizadores } from "./Utilizadores";
 import { MenuConta } from "./MenuConta";
 import { AlterarPalavraPasse } from "./AlterarPalavraPasse";
 import { asset } from "../lib/utils";
-import { criarRenderer, lerLegenda } from "../lib/simbologia";
+import { criarRenderer, criarRendererControlo, lerLegenda } from "../lib/simbologia";
 import { listarVerificacoes, marcarVerificacao, type Papel, type Utilizador } from "../lib/api";
 import {
     AREAS,
@@ -203,8 +203,10 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                     filter: verificados.length
                         ? new FeatureFilter({ objectIds: verificados })
                         : new FeatureFilter({ where: "1=0" }),
-                    includedEffect: "drop-shadow(0 0 3px #16a34a) saturate(160%)",
-                    excludedEffect: "grayscale(85%) opacity(40%)",
+                    // Realça-se o verificado em vez de apagar o resto: no início nada
+                    // está verificado, e esbater tudo tornava o mapa ilegível.
+                    includedEffect: "drop-shadow(0 0 6px #16a34a) brightness(1.5) saturate(200%)",
+                    excludedEffect: "opacity(80%)",
                 });
             })
             .catch((e) => console.debug("Sem layerView para o controlo:", e));
@@ -356,10 +358,15 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                 renderersOriginaisRef.current[config.id] = layer.renderer;
             }
 
-            // Em controlo mantém-se a simbologia do portal: o que distingue os
-            // polígonos é o featureEffect, não a cor de preenchimento.
-            if (colorirPor === "webmap" || colorirPor === "controlo") {
+            if (colorirPor === "webmap") {
                 layer.renderer = renderersOriginaisRef.current[config.id];
+                continue;
+            }
+
+            // Em controlo não há campo por que colorir: usa-se um contorno de alto
+            // contraste para os polígonos se lerem bem sobre a imagem de satélite.
+            if (colorirPor === "controlo") {
+                layer.renderer = criarRendererControlo();
                 continue;
             }
 

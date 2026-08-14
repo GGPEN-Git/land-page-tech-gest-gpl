@@ -23,7 +23,9 @@ export const CAMPO_GLOBAL_ID = "GlobalId";
  */
 export const CONTROLO = {
     verificado: { label: "Verificados", cor: "#16a34a" },
-    porVerificar: { label: "Por verificar", cor: "#9ca3af" },
+    // Mesmo amarelo do contorno em `criarRendererControlo`, para a legenda
+    // corresponder ao que se vê no mapa.
+    porVerificar: { label: "Por verificar", cor: "#ffd166" },
 } as const;
 
 export interface CamadaConfig {
