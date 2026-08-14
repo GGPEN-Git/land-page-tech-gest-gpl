@@ -1,8 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import Editor from "@arcgis/core/widgets/Editor";
+import FormTemplate from "@arcgis/core/form/FormTemplate";
+import FieldElement from "@arcgis/core/form/elements/FieldElement";
 import type MapView from "@arcgis/core/views/MapView";
 import type FeatureLayer from "@arcgis/core/layers/FeatureLayer";
+
+/**
+ * Campos que nunca fazem sentido num formulário: identificadores, geometria
+ * calculada pelo servidor e o registo automático de quem editou.
+ */
+const CAMPOS_DE_SISTEMA = /^(fid|objectid|globalid|shape_|shape__|creator|editor|creationda|creation_|editdate|creationdate)/i;
 
 interface ModuloEdicaoProps {
     view: MapView | null;
@@ -26,6 +34,8 @@ interface ModuloEdicaoProps {
 export function ModuloEdicao({ view, camada, titulo, onFechar }: ModuloEdicaoProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [erro, setErro] = useState<string | null>(null);
+    /** Campos que o serviço não deixa alterar — explicados ao utilizador. */
+    const [naoEditaveis, setNaoEditaveis] = useState<string[]>([]);
 
     useEffect(() => {
         const container = containerRef.current;
@@ -37,6 +47,34 @@ export function ModuloEdicao({ view, camada, titulo, onFechar }: ModuloEdicaoPro
             setErro("Esta camada não permite editar registos.");
             return;
         }
+
+        // Sem formTemplate o Editor inventa o formulário e deixa campos de fora.
+        // Construímo-lo a partir dos campos editáveis da própria camada, pela
+        // ordem em que estão definidos no serviço.
+        const editaveis = camada.fields.filter(
+            (campo) => campo.editable && !CAMPOS_DE_SISTEMA.test(campo.name),
+        );
+
+        if (editaveis.length === 0) {
+            setErro("O serviço não declara nenhum campo editável.");
+            return;
+        }
+
+        const formTemplateAnterior = camada.formTemplate;
+
+        camada.formTemplate = new FormTemplate({
+            title: "{Bairro}",
+            // Campos com domínio aparecem como lista de opções; os restantes como texto.
+            elements: editaveis.map(
+                (campo) => new FieldElement({ fieldName: campo.name, label: campo.alias || campo.name }),
+            ),
+        });
+
+        setNaoEditaveis(
+            camada.fields
+                .filter((campo) => !campo.editable && !CAMPOS_DE_SISTEMA.test(campo.name))
+                .map((campo) => campo.alias || campo.name),
+        );
 
         const editor = new Editor({
             view,
@@ -54,6 +92,7 @@ export function ModuloEdicao({ view, camada, titulo, onFechar }: ModuloEdicaoPro
 
         return () => {
             editor.destroy();
+            camada.formTemplate = formTemplateAnterior;
         };
     }, [view, camada]);
 
@@ -78,7 +117,16 @@ export function ModuloEdicao({ view, camada, titulo, onFechar }: ModuloEdicaoPro
             {erro ? (
                 <p className="p-4 text-sm text-[#8a2020]">{erro}</p>
             ) : (
-                <div ref={containerRef} className="flex-1 min-h-0 overflow-auto" />
+                <>
+                    <div ref={containerRef} className="flex-1 min-h-0 overflow-auto" />
+
+                    {naoEditaveis.length > 0 && (
+                        <p className="shrink-0 border-t border-stone-200 px-4 py-3 text-[11px] text-stone-500 leading-snug">
+                            <strong className="font-semibold">Não editáveis pelo serviço:</strong>{" "}
+                            {naoEditaveis.join(", ")}.
+                        </p>
+                    )}
+                </>
             )}
         </aside>
     );
