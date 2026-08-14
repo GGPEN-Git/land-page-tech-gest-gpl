@@ -1,7 +1,7 @@
 import UniqueValueRenderer from "@arcgis/core/renderers/UniqueValueRenderer";
 import SimpleFillSymbol from "@arcgis/core/symbols/SimpleFillSymbol";
 import SimpleLineSymbol from "@arcgis/core/symbols/SimpleLineSymbol";
-import { CAMPO_CONTROLO, COR_POR_OMISSAO, CONTROLOS, SEM_MARCACAO, type ContagemConfig } from "./arcgis";
+import { CAMPO_CONTROLO, COR_POR_OMISSAO, CONTROLOS, VALOR_POR_VERIFICAR, type ContagemConfig } from "./arcgis";
 
 function preenchimento(cor: string) {
     return new SimpleFillSymbol({
@@ -74,15 +74,18 @@ export function lerLegenda(renderer: unknown): LegendaLida {
 /**
  * Simbologia do modo Controlo, por `GGPEN_Controlo`.
  *
- * O símbolo por omissão é "Sem análise" — os registos a `null`, em que ninguém
- * tocou. Os três estados atribuíveis, incluindo "Por verificar", são valores únicos.
+ * "Por verificar" vai no símbolo por omissão, e não como valor único: assim
+ * apanha tanto o zero como os registos a `null`, que são a maioria.
  */
 export function criarRendererControlo() {
+    const porVerificar = CONTROLOS.find((c) => c.valor === VALOR_POR_VERIFICAR);
+    const atribuidos = CONTROLOS.filter((c) => c.valor !== VALOR_POR_VERIFICAR);
+
     return new UniqueValueRenderer({
         field: CAMPO_CONTROLO,
-        defaultSymbol: preenchimento(SEM_MARCACAO.cor),
-        defaultLabel: SEM_MARCACAO.label,
-        uniqueValueInfos: CONTROLOS.map((c) => ({
+        defaultSymbol: preenchimento(porVerificar?.cor || COR_POR_OMISSAO),
+        defaultLabel: porVerificar?.label || "Por verificar",
+        uniqueValueInfos: atribuidos.map((c) => ({
             value: String(c.valor),
             label: c.label,
             symbol: preenchimento(c.cor),

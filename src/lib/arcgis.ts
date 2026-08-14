@@ -25,9 +25,8 @@ export const CAMPO_CONTROLO = "GGPEN_Controlo";
  * convenção nossa. Se um dia lhe for atribuído um domínio no portal, estes
  * valores têm de coincidir com os de lá.
  *
- * Os três são **decisões de quem analisou**. "Por verificar" significa que o
- * polígono foi visto e deixado para uma segunda passagem — não se confunde com
- * `null`, que é o registo em que ninguém tocou.
+ * "Por verificar" é o estado de partida e também o de quem viu o polígono e o
+ * deixou para uma segunda passagem — inclui portanto os registos a `null`.
  */
 export const VALOR_POR_VERIFICAR = 0;
 export const VALOR_VALIDADO = 1;
@@ -40,15 +39,14 @@ export const CONTROLOS: ContagemConfig[] = [
     { valor: VALOR_POR_VERIFICAR, label: "Por verificar", cor: "#ffd166" },
 ];
 
-/** Estado inicial: `null`. Não é escolhido por ninguém, é a ausência de análise. */
-export const SEM_MARCACAO = { label: "Sem análise", cor: "#9ca3af" } as const;
-
+/**
+ * "Por verificar" apanha o zero **e** o nulo: são três estados apenas, e os
+ * registos em que ninguém tocou entram nessa contagem.
+ */
 export function condicaoControlo(valor: number): string {
-    return `${CAMPO_CONTROLO} = ${valor}`;
-}
-
-export function condicaoSemMarcacao(): string {
-    return `${CAMPO_CONTROLO} IS NULL`;
+    return valor === VALOR_POR_VERIFICAR
+        ? `(${CAMPO_CONTROLO} IS NULL OR ${CAMPO_CONTROLO} = ${VALOR_POR_VERIFICAR})`
+        : `${CAMPO_CONTROLO} = ${valor}`;
 }
 
 export interface CamadaConfig {
