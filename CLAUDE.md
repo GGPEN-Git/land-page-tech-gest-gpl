@@ -129,13 +129,16 @@ Atenção ao `filtroBase`: um edifício criado sem `AOI = 'Boavista'` fica invis
 
 Quarto modo do seletor, **só para admin**. Grava no campo **`GGPEN_Controlo`** da camada, um inteiro editável **sem domínio definido no portal** — os códigos são convenção nossa, em `arcgis.ts`:
 
-| Valor | Estado |
-|---|---|
-| `1` | Validado |
-| `2` | Não validado |
-| `0` ou `null` | Por verificar |
+| Valor | Estado | Significado |
+|---|---|---|
+| `1` | Validado | decisão tomada |
+| `2` | Não validado | decisão tomada |
+| `0` | Por verificar | **analisado e adiado** para uma segunda passagem |
+| `null` | Sem análise | ninguém lhe tocou |
 
-Como a esmagadora maioria dos registos está a `null`, "Por verificar" é o **símbolo por omissão** do renderer e a sua contagem usa `condicaoControlo()`, que apanha zero e nulo.
+**`0` e `null` não são a mesma coisa.** "Por verificar" é uma decisão de quem analisou; `null` é a ausência dela. Juntá-los faria a contagem de "Por verificar" incluir os milhares de registos intactos e deixá-la sem significado.
+
+"Sem análise" é o símbolo por omissão do renderer e conta-se por `condicaoSemMarcacao()`; os três estados atribuíveis são valores únicos.
 
 Clicar seleciona; a gravação é por botão, com `applyEdits`. Escreve no ArcGIS Online — é, com o `ModuloEdicao`, a única parte da aplicação que o faz.
 

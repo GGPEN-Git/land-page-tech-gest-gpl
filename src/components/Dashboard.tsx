@@ -20,15 +20,15 @@ import {
     CAMPO_AOI,
     CAMPO_CONTROLO,
     CAMPO_ESTADO,
-    CAMPO_GLOBAL_ID,
     CAMPO_VALIDACAO,
     CONTROLOS,
     ESTADOS,
     FILTROS,
+    SEM_MARCACAO,
     VALIDACOES,
-    VALOR_POR_VERIFICAR,
     comCondicao,
     condicaoControlo,
+    condicaoSemMarcacao,
     construirWhere,
     formatarNumero,
 } from "../lib/arcgis";
@@ -72,6 +72,8 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
 
     /** Contagens por valor de GGPEN_Controlo, respeitando os filtros. */
     const [controlos, setControlos] = useState<Record<number, number>>({});
+    /** Registos com GGPEN_Controlo a null — ainda sem qualquer análise. */
+    const [semAnalise, setSemAnalise] = useState<number | null>(null);
     /** Incrementado depois de gravar, para as contagens voltarem a correr. */
     const [recarga, setRecarga] = useState(0);
     const [aMarcar, setAMarcar] = useState(false);
@@ -80,9 +82,8 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
     /** Polígono clicado em modo Controlo. */
     const [selecionado, setSelecionado] = useState<{
         objectid: number;
-        globalId: string;
         bairro: string | null;
-        controlo: number;
+        controlo: number | null;
     } | null>(null);
 
     const [opcoes, setOpcoes] = useState<Record<string, string[]>>({});
@@ -194,10 +195,10 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                     return;
                 }
 
+                // Basta o objectid: a gravação é um applyEdits na própria camada.
                 const objectid = Number(atributos[layer.objectIdField]);
-                const globalId = atributos[CAMPO_GLOBAL_ID];
 
-                if (!Number.isInteger(objectid) || !globalId) {
+                if (!Number.isInteger(objectid)) {
                     setSelecionado(null);
                     setAviso({ tipo: "erro", texto: "Este polígono não tem identificador utilizável." });
                     return;
@@ -205,9 +206,12 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
 
                 setSelecionado({
                     objectid,
-                    globalId: String(globalId),
                     bairro: typeof atributos.Bairro === "string" ? atributos.Bairro : null,
-                    controlo: Number(atributos[CAMPO_CONTROLO]) || VALOR_POR_VERIFICAR,
+                    // null quando ainda não houve análise — distinto de "Por verificar".
+                    controlo:
+                        atributos[CAMPO_CONTROLO] === null || atributos[CAMPO_CONTROLO] === undefined
+                            ? null
+                            : Number(atributos[CAMPO_CONTROLO]),
                 });
                 setAviso(null);
             } catch (e) {
@@ -277,6 +281,7 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
     useEffect(() => {
         if (!emControlo || !configControlo) {
             setControlos({});
+            setSemAnalise(null);
             return;
         }
 
@@ -302,7 +307,15 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                     ),
                 );
 
-                if (!cancelado) setControlos(Object.fromEntries(totais));
+                // Sem análise conta à parte: é a ausência de decisão, não uma decisão.
+                const semAnalise = await layer.queryFeatureCount({
+                    where: comCondicao(clausula, condicaoSemMarcacao()),
+                });
+
+                if (cancelado) return;
+
+                setControlos(Object.fromEntries(totais));
+                setSemAnalise(semAnalise);
             } catch (e) {
                 console.debug("Falha ao contar o controlo:", e);
             }
@@ -938,6 +951,17 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                             <div className="px-5 py-4">
                                 {selecionado ? (
                                     <div className="space-y-2">
+                                        {selecionado.controlo === null && (
+                                            <p className="flex items-center gap-3 pb-2 text-white/60 text-xs">
+                                                <span
+                                                    className="w-4 h-4 rounded shrink-0"
+                                                    style={{ backgroundColor: SEM_MARCACAO.cor }}
+                                                    aria-hidden="true"
+                                                />
+                                                Ainda sem análise
+                                            </p>
+                                        )}
+
                                         {CONTROLOS.map((opcao) => {
                                             const atual = selecionado.controlo === opcao.valor;
 
@@ -996,8 +1020,21 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
 
                         <div className="px-5 py-4 space-y-2">
                             {emControlo
-                                ? CONTROLOS.map((item) => (
-                                      <div key={item.valor} className="flex items-center gap-3">
+                                ? [
+                                      ...CONTROLOS.map((c) => ({
+                                          chave: String(c.valor),
+                                          label: c.label,
+                                          cor: c.cor,
+                                          total: controlos[c.valor],
+                                      })),
+                                      {
+                                          chave: "sem-analise",
+                                          label: SEM_MARCACAO.label,
+                                          cor: SEM_MARCACAO.cor,
+                                          total: semAnalise ?? undefined,
+                                      },
+                                  ].map((item) => (
+                                      <div key={item.chave} className="flex items-center gap-3">
                                           <span
                                               className="w-4 h-4 rounded shrink-0"
                                               style={{ backgroundColor: item.cor }}
@@ -1007,9 +1044,7 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                                           <span className="text-white text-sm flex-1">{item.label}</span>
 
                                           <span className="bg-[#0e2242] rounded-md px-3 py-1 min-w-[70px] text-center text-white text-base font-bold">
-                                              {controlos[item.valor] === undefined
-                                                  ? "—"
-                                                  : formatarNumero(controlos[item.valor])}
+                                              {item.total === undefined ? "—" : formatarNumero(item.total)}
                                           </span>
                                       </div>
                                   ))
