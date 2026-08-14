@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ChevronDown, ChevronLeft, ChevronRight, Home, Minus, Plus, RotateCcw } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Home, Minus, Plus, RotateCcw, SquarePen } from "lucide-react";
 import type MapView from "@arcgis/core/views/MapView";
 import type Viewpoint from "@arcgis/core/Viewpoint";
 import type FeatureLayer from "@arcgis/core/layers/FeatureLayer";
@@ -10,6 +10,7 @@ import { MapaArcGIS } from "./MapaArcGIS";
 import { Utilizadores } from "./Utilizadores";
 import { MenuConta } from "./MenuConta";
 import { AlterarPalavraPasse } from "./AlterarPalavraPasse";
+import { ModuloEdicao } from "./ModuloEdicao";
 import { asset } from "../lib/utils";
 import { criarRenderer, criarRendererControlo, lerLegenda } from "../lib/simbologia";
 import { listarVerificacoes, marcarVerificacao, type Papel, type Utilizador } from "../lib/api";
@@ -89,6 +90,8 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
     const [rotulosMapa, setRotulosMapa] = useState<Record<string, string>>({});
 
     const [camadas, setCamadas] = useState<Record<string, FeatureLayer>>({});
+    const [view, setView] = useState<MapView | null>(null);
+    const [edicaoAberta, setEdicaoAberta] = useState(false);
     const [aConsultar, setAConsultar] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
 
@@ -129,6 +132,8 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
     const handleViewReady = useCallback((view: MapView) => {
         viewRef.current = view;
         viewpointInicialRef.current = view.viewpoint.clone();
+        // Também em estado: o módulo de edição é um componente e precisa da view como prop.
+        setView(view);
     }, []);
 
     const handleCamadas = useCallback((encontradas: Record<string, FeatureLayer>) => {
@@ -794,6 +799,33 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                             </p>
                         )}
 
+                        {/* Edição: escreve no ArcGIS, ao contrário de tudo o resto. Só admin. */}
+                        {papel === "admin" && (
+                            <>
+                                <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mt-8 mb-3">
+                                    Edição
+                                </h2>
+
+                                <button
+                                    type="button"
+                                    onClick={() => setEdicaoAberta((v) => !v)}
+                                    disabled={configsAtivas.length !== 1}
+                                    title={
+                                        configsAtivas.length !== 1 ? "Escolha uma área — a edição é numa camada" : undefined
+                                    }
+                                    className="w-full flex items-center justify-center gap-2 rounded-md bg-[#1e6fd9] py-2 text-sm text-white hover:bg-[#1a5fb8] transition-colors disabled:opacity-30 disabled:hover:bg-[#1e6fd9]"
+                                >
+                                    <SquarePen className="w-4 h-4" />
+                                    {edicaoAberta ? "Fechar edição" : "Editar edifícios"}
+                                </button>
+
+                                <p className="mt-2 text-[11px] text-white/40 leading-snug">
+                                    Altera geometria e atributos dos edifícios existentes, no ArcGIS Online. Criar e
+                                    eliminar estão desativados.
+                                </p>
+                            </>
+                        )}
+
                         {/* O bloco secundário mostra o que não estiver no cartão principal. */}
                         {mostraValidacao && (
                             <>
@@ -990,6 +1022,15 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                                 )}
                             </div>
                         </div>
+                    )}
+
+                    {edicaoAberta && configsAtivas.length === 1 && (
+                        <ModuloEdicao
+                            view={view}
+                            camada={camadas[configsAtivas[0].id] || null}
+                            titulo={configsAtivas[0].titulo}
+                            onFechar={() => setEdicaoAberta(false)}
+                        />
                     )}
 
                     {/* Legenda do que está desenhado no mapa */}

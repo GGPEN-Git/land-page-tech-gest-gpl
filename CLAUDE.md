@@ -115,6 +115,16 @@ Os renderers originais são guardados em `renderersOriginaisRef` na primeira vez
 
 O que continua a vir do código é a **lista de valores contados** (`0`, `1`, `2`). Um valor novo no domínio não é contado até ser acrescentado a `ESTADOS`/`VALIDACOES`.
 
+### Edição (`ModuloEdicao.tsx`)
+
+**A única parte da aplicação que escreve no ArcGIS.** Usa o widget `Editor` sobre a camada ativa. Só admin, e só com uma área escolhida.
+
+`addEnabled: false` e `deleteEnabled: false` — só se **alteram** feições existentes. São registos de um levantamento oficial, e a interface não teria como desfazer um apagar nem um polígono desenhado por engano.
+
+A aplicação não está autenticada no portal, portanto as edições vão como **anónimas**. Funciona porque o serviço tem `Create,Update,Delete` nas capacidades e `allowAnonymousToUpdate: true` — o que também significa que qualquer pessoa na internet o consegue fazer, com ou sem esta aplicação.
+
+Atenção ao `filtroBase`: um edifício criado sem `AOI = 'Boavista'` fica invisível no painel, porque o `definitionExpression` o exclui.
+
 ### Modo Controlo
 
 Quarto modo do seletor, **só para admin**. Ao contrário dos outros, `Controlo` **não é um campo do ArcGIS**: a marcação vive na tabela `verificacoes` do nosso Postgres, porque a aplicação lê os serviços anonimamente e não tem permissão de escrita no portal.
