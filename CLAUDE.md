@@ -137,6 +137,10 @@ Quarto modo do seletor, **só para admin**. Grava no campo **`GGPEN_Controlo`** 
 
 São **três estados**. "Por verificar" é o de partida e também o de quem viu o polígono e o deixou para uma segunda passagem — por isso apanha o zero e o nulo, tanto no renderer (símbolo por omissão) como na contagem (`condicaoControlo`).
 
+Ao selecionar um polígono, o painel mostra também o **diagnóstico automático** — `lib/conformidade.ts`, que reproduz em TypeScript a expressão Arcade do webmap (Regularizado, erros de NIF, tipologia, casas…). Serve para quem valida decidir com o mesmo critério que o mapa usa para desenhar.
+
+**Se a expressão for alterada no ArcGIS Online, `conformidade.ts` tem de acompanhar** — são duas cópias da mesma regra, e não há forma de as manter sincronizadas automaticamente.
+
 Clicar seleciona; a gravação é por botão, com `applyEdits`. Escreve no ArcGIS Online — é, com o `ModuloEdicao`, a única parte da aplicação que o faz.
 
 Só aparece com **uma área escolhida** e se a camada declarar o campo (Sambizanga não o tem).

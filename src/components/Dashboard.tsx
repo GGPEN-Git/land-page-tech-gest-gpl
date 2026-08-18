@@ -12,6 +12,7 @@ import { AlterarPalavraPasse } from "./AlterarPalavraPasse";
 import { ModuloEdicao } from "./ModuloEdicao";
 import { asset } from "../lib/utils";
 import { criarRenderer, criarRendererControlo, lerLegenda } from "../lib/simbologia";
+import { CONFORMIDADES, classificar, type Conformidade } from "../lib/conformidade";
 import type { Papel, Utilizador } from "../lib/api";
 import {
     AREAS,
@@ -81,6 +82,7 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
         objectid: number;
         bairro: string | null;
         controlo: number | null;
+        conformidade: Conformidade;
     } | null>(null);
 
     const [opcoes, setOpcoes] = useState<Record<string, string[]>>({});
@@ -204,6 +206,9 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                 setSelecionado({
                     objectid,
                     bairro: typeof atributos.Bairro === "string" ? atributos.Bairro : null,
+                    // Diagnóstico automático, para quem valida decidir com o mesmo
+                    // critério que o mapa usa para desenhar.
+                    conformidade: classificar(atributos),
                     // null quando ainda não houve análise — distinto de "Por verificar".
                     controlo:
                         atributos[CAMPO_CONTROLO] === null || atributos[CAMPO_CONTROLO] === undefined
@@ -757,10 +762,34 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                         )}
 
                         {emControlo && (
-                            <p className="mt-3 rounded-md bg-[#1a4d2e]/30 border border-[#5dd618]/20 px-3 py-2 text-[11px] text-[#b6e9a0] leading-snug">
-                                Clique num polígono para ver os detalhes e o seu estado de verificação. A marcação faz-se
-                                no painel em baixo à esquerda. Os verificados ficam destacados no mapa.
-                            </p>
+                            <>
+                                <p className="mt-3 rounded-md bg-[#1a4d2e]/30 border border-[#5dd618]/20 px-3 py-2 text-[11px] text-[#b6e9a0] leading-snug">
+                                    Clique num polígono para ver os detalhes e marcar no painel em baixo à esquerda. O
+                                    <strong className="font-semibold"> preenchimento</strong> mostra o estado de controlo; o
+                                    <strong className="font-semibold"> contorno</strong> mostra a verificação automática.
+                                </p>
+
+                                <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mt-6 mb-3">
+                                    Contornos
+                                </h2>
+
+                                <div className="space-y-1.5">
+                                    {CONFORMIDADES.map((item) => (
+                                        <div key={item.id} className="flex items-start gap-2.5">
+                                            <span
+                                                className="w-3.5 h-3.5 rounded-sm shrink-0 mt-0.5 border-2"
+                                                style={{ borderColor: item.cor }}
+                                                aria-hidden="true"
+                                            />
+
+                                            <span className="text-white/70 text-[11px] leading-snug flex-1">
+                                                {item.resumo}
+                                                {!item.desenhada && <span className="text-white/30"> (sem símbolo no webmap)</span>}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
                         )}
 
                         {/* Edição: escreve no ArcGIS, ao contrário de tudo o resto. Só admin. */}
@@ -939,6 +968,36 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                             <div className="px-5 py-4">
                                 {selecionado ? (
                                     <div className="space-y-2">
+                                        {/* Diagnóstico automático, pelas mesmas regras do webmap */}
+                                        <div className="mb-4 rounded-lg bg-[#0e2242] px-3 py-2.5">
+                                            <p className="text-white/50 text-[10px] uppercase tracking-[0.15em] mb-1.5">
+                                                Verificação automática
+                                            </p>
+
+                                            <div className="flex items-start gap-2">
+                                                <span
+                                                    className="w-3 h-3 rounded-sm shrink-0 mt-0.5"
+                                                    style={{ backgroundColor: selecionado.conformidade.cor }}
+                                                    aria-hidden="true"
+                                                />
+
+                                                <span
+                                                    className={`text-xs leading-snug ${
+                                                        selecionado.conformidade.ok ? "text-[#b6e9a0]" : "text-[#f0c8a0]"
+                                                    }`}
+                                                >
+                                                    {selecionado.conformidade.resumo}
+                                                </span>
+                                            </div>
+
+                                            {!selecionado.conformidade.desenhada && (
+                                                <p className="mt-1.5 text-[10px] text-white/40 leading-snug">
+                                                    O webmap não tem símbolo para esta categoria — este polígono não é
+                                                    desenhado.
+                                                </p>
+                                            )}
+                                        </div>
+
                                         {CONTROLOS.map((opcao) => {
                                             // null conta como "Por verificar": são três estados apenas.
                                             const atual = (selecionado.controlo ?? VALOR_POR_VERIFICAR) === opcao.valor;

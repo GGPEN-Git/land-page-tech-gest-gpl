@@ -1,12 +1,17 @@
 import UniqueValueRenderer from "@arcgis/core/renderers/UniqueValueRenderer";
 import SimpleFillSymbol from "@arcgis/core/symbols/SimpleFillSymbol";
 import SimpleLineSymbol from "@arcgis/core/symbols/SimpleLineSymbol";
-import { CAMPO_CONTROLO, COR_POR_OMISSAO, CONTROLOS, VALOR_POR_VERIFICAR, type ContagemConfig } from "./arcgis";
+import { COR_POR_OMISSAO, CONTROLOS, VALOR_POR_VERIFICAR, type ContagemConfig } from "./arcgis";
+import { CONFORMIDADES, EXPRESSAO_CONFORMIDADE } from "./conformidade";
 
+/**
+ * Preenchimento a cheio, como antes, mas com o contorno da mesma cor e da
+ * espessura do webmap — antes era um branco fino que destoava do resto do mapa.
+ */
 function preenchimento(cor: string) {
     return new SimpleFillSymbol({
         color: cor,
-        outline: new SimpleLineSymbol({ color: [255, 255, 255, 0.35], width: 0.4 }),
+        outline: new SimpleLineSymbol({ color: cor, width: 1.8 }),
     });
 }
 
@@ -72,24 +77,39 @@ export function lerLegenda(renderer: unknown): LegendaLida {
 }
 
 /**
- * Simbologia do modo Controlo, por `GGPEN_Controlo`.
+ * Simbologia do modo Controlo, com dois eixos ao mesmo tempo:
  *
- * "Por verificar" vai no símbolo por omissão, e não como valor único: assim
- * apanha tanto o zero como os registos a `null`, que são a maioria.
+ * - **preenchimento** = estado de controlo (`GGPEN_Controlo`), que é o que se marca
+ * - **contorno** = diagnóstico automático, nas cores da expressão do webmap
+ *
+ * Como o diagnóstico não é um campo mas uma expressão, o renderer classifica por
+ * `valueExpression` e há um símbolo por cada combinação das duas.
  */
 export function criarRendererControlo() {
+    const infos = [];
+
+    for (const conformidade of CONFORMIDADES) {
+        for (const controlo of CONTROLOS) {
+            infos.push({
+                value: `${conformidade.id}|${controlo.valor}`,
+                label: `${controlo.label} · ${conformidade.resumo}`,
+                symbol: new SimpleFillSymbol({
+                    color: controlo.cor,
+                    outline: new SimpleLineSymbol({ color: conformidade.cor, width: 1.8 }),
+                }),
+            });
+        }
+    }
+
     const porVerificar = CONTROLOS.find((c) => c.valor === VALOR_POR_VERIFICAR);
-    const atribuidos = CONTROLOS.filter((c) => c.valor !== VALOR_POR_VERIFICAR);
 
     return new UniqueValueRenderer({
-        field: CAMPO_CONTROLO,
+        valueExpression: EXPRESSAO_CONFORMIDADE,
+        valueExpressionTitle: "Controlo e conformidade",
+        // Rede de segurança: uma combinação nova cai aqui em vez de desaparecer.
         defaultSymbol: preenchimento(porVerificar?.cor || COR_POR_OMISSAO),
         defaultLabel: porVerificar?.label || "Por verificar",
-        uniqueValueInfos: atribuidos.map((c) => ({
-            value: String(c.valor),
-            label: c.label,
-            symbol: preenchimento(c.cor),
-        })),
+        uniqueValueInfos: infos,
     });
 }
 
