@@ -21,11 +21,9 @@ import {
     CAMPO_AOI,
     CAMPO_CONTROLO,
     CAMPO_ESTADO,
-    CAMPO_VALIDACAO,
     CONTROLOS,
     ESTADOS,
     FILTROS,
-    VALIDACOES,
     VALOR_POR_VERIFICAR,
     comCondicao,
     condicaoControlo,
@@ -55,13 +53,11 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
     /**
      * Como colorir os edifícios: "webmap" mantém a simbologia definida no ArcGIS
      * Online — assim qualquer alteração feita no portal aparece aqui sem tocar no código.
-     * Por omissão usa-se "Estado" para o utilizador ver imediatamente a coloração por estado.
+     * Por omissão usa-se "Inscrição", que é o campo por que o webmap está pintado.
      */
-    const [colorirPor, setColorirPor] = useState<
-        "webmap" | "controlo" | typeof CAMPO_VALIDACAO | typeof CAMPO_ESTADO
-    >(CAMPO_ESTADO);
+    const [colorirPor, setColorirPor] = useState<"webmap" | "controlo" | typeof CAMPO_ESTADO>(CAMPO_ESTADO);
 
-    // Força "Estado" para utilizadores não-admin e impede alteração.
+    // Força "Inscrição" para utilizadores não-admin e impede alteração.
     useEffect(() => {
         if (papel !== "admin" && colorirPor !== CAMPO_ESTADO) {
             setColorirPor(CAMPO_ESTADO);
@@ -87,7 +83,6 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
 
     const [opcoes, setOpcoes] = useState<Record<string, string[]>>({});
     const [contagens, setContagens] = useState<Record<number, number>>({});
-    const [validacoes, setValidacoes] = useState<Record<number, number>>({});
 
     /** Cores e rótulos lidos do renderer em uso, para a legenda nunca mentir sobre o mapa. */
     const [coresMapa, setCoresMapa] = useState<Record<string, string>>({});
@@ -126,23 +121,8 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
     const podeControlo = papel === "admin" && configsAtivas.length === 1 && temCampoControlo;
     const configControlo = podeControlo ? configsAtivas[0] : null;
 
-    /**
-     * A disponibilidade dos campos é lida das camadas, não da configuração:
-     * o portal pode acrescentar campos a qualquer momento, como aconteceu com
-     * `Validacao` e `GGPEN_Controlo` em Sambizanga.
-     */
-    const temCampo = (id: string, campo: string) => !!camadas[id]?.fields?.some((c) => c.name === campo);
-
-    const podeValidacao = camadasProntas && configsAtivas.every((c) => temCampo(c.id, CAMPO_VALIDACAO));
-    const temValidacao = configsAtivas.some((c) => temCampo(c.id, CAMPO_VALIDACAO));
-
-    // O cartão mostra sempre o campo por que o mapa está pintado. Com a simbologia
-    // do webmap, esse campo é o `campoSimbologia` declarado para a camada.
-    const mostraValidacao =
-        !emControlo && podeValidacao && (colorirPor === "webmap" || colorirPor === CAMPO_VALIDACAO);
-
-    const principais = mostraValidacao ? VALIDACOES : ESTADOS;
-    const contagensPrincipais = mostraValidacao ? validacoes : contagens;
+    const principais = ESTADOS;
+    const contagensPrincipais = contagens;
 
     const handleViewReady = useCallback((view: MapView) => {
         viewRef.current = view;
@@ -344,15 +324,11 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                 continue;
             }
 
-            // Sambizanga não tem Validacao: mantém-se pintada por Estado.
-            const campo =
-                colorirPor === CAMPO_VALIDACAO && config.campoSimbologia !== CAMPO_VALIDACAO ? CAMPO_ESTADO : colorirPor;
-
-            layer.renderer = criarRenderer(campo, campo === CAMPO_VALIDACAO ? VALIDACOES : ESTADOS);
+            layer.renderer = criarRenderer(CAMPO_ESTADO, ESTADOS);
         }
 
         // Depois de definidos, lê-se do renderer o que o cartão vai mostrar.
-        const campoCartao = mostraValidacao ? CAMPO_VALIDACAO : CAMPO_ESTADO;
+        const campoCartao = CAMPO_ESTADO;
         let cores: Record<string, string> = {};
         let rotulos: Record<string, string> = {};
 
@@ -369,7 +345,7 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
         setCoresMapa(cores);
         setRotulosMapa(rotulos);
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [camadas, chaveCamadas, colorirPor, mostraValidacao]);
+    }, [camadas, chaveCamadas, colorirPor]);
 
     // Trocar de área invalida as escolhas anteriores: os bairros de uma não existem na outra.
     useEffect(() => {
@@ -466,12 +442,9 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                 /** Soma a contagem em todas as camadas ativas que tenham o campo. */
                 const somar = async (campo: string, valor: number) => {
                     const parcelas = await Promise.all(
-                        alvos
-                            // Sambizanga não tem Validacao; pedi-lo daria erro no servidor.
-                            .filter(({ config }) => campo !== CAMPO_VALIDACAO || config.campoSimbologia === CAMPO_VALIDACAO)
-                            .map(({ config, layer }) =>
-                                layer.queryFeatureCount({ where: comCondicao(whereDe(config), `${campo} = ${valor}`) }),
-                            ),
+                        alvos.map(({ config, layer }) =>
+                            layer.queryFeatureCount({ where: comCondicao(whereDe(config), `${campo} = ${valor}`) }),
+                        ),
                     );
 
                     return parcelas.reduce((total, parcela) => total + parcela, 0);
@@ -481,15 +454,10 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                     ESTADOS.map(async (e) => [e.valor, await somar(CAMPO_ESTADO, e.valor)] as const),
                 );
 
-                const totaisValidacao = temValidacao
-                    ? await Promise.all(VALIDACOES.map(async (v) => [v.valor, await somar(CAMPO_VALIDACAO, v.valor)] as const))
-                    : [];
-
                 if (cancelado) return;
 
                 setOpcoes(Object.fromEntries(listas));
                 setContagens(Object.fromEntries(totaisEstado));
-                setValidacoes(Object.fromEntries(totaisValidacao));
                 setErro(null);
 
                 await enquadrar();
@@ -509,7 +477,7 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
             cancelado = true;
         };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [camadas, camadasProntas, chaveCamadas, area, selecoes, temValidacao]);
+    }, [camadas, camadasProntas, chaveCamadas, area, selecoes]);
 
     function selecionar(campo: string, valor: string | null) {
         setSelecoes((atual) => {
@@ -597,8 +565,9 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                     <div className="h-full overflow-y-auto px-6 py-6" style={{ width: LARGURA_ABA }}>
                         <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mb-3">Filtros</h2>
 
-                        {/* ÁREA — pode trocar de camada, por isso não passa pelo ciclo dos outros filtros */}
-                        <div className="border-b border-white/10">
+                        {/* ÁREA — pode trocar de camada, por isso não passa pelo ciclo dos outros
+                            filtros. Escondida quando não há áreas configuradas. */}
+                        <div className={AREAS.length === 0 ? "hidden" : "border-b border-white/10"}>
                             <button
                                 type="button"
                                 onClick={() => setFiltroAberto(areaAberta ? null : "area")}
@@ -718,18 +687,11 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                                     [
                                         { campo: "webmap", label: "Webmap" },
                                         { campo: CAMPO_ESTADO, label: "Estado" },
-                                        { campo: CAMPO_VALIDACAO, label: "Validação" },
                                         { campo: "controlo", label: "Controlo" },
                                     ] as const
                                 ).map((opcao) => {
-                                    const indisponivel =
-                                        (opcao.campo === CAMPO_VALIDACAO && !podeValidacao) ||
-                                        (opcao.campo === "controlo" && !podeControlo);
-
-                                    const motivo =
-                                        opcao.campo === CAMPO_VALIDACAO
-                                            ? "Alguma das camadas ativas não tem o campo Validação"
-                                            : "Escolha uma área — o controlo escreve numa camada de cada vez";
+                                    const indisponivel = opcao.campo === "controlo" && !podeControlo;
+                                    const motivo = "Escolha uma área — o controlo escreve numa camada de cada vez";
 
                                     return (
                                         <button
@@ -811,68 +773,6 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                                     <SquarePen className="w-4 h-4" />
                                     {edicaoAberta ? "Fechar edição" : "Editar edifícios"}
                                 </button>
-
-                                <p className="mt-2 text-[11px] text-white/40 leading-snug">
-                                    Altera geometria e atributos dos edifícios existentes, no ArcGIS Online. Criar e
-                                    eliminar estão desativados.
-                                </p>
-                            </>
-                        )}
-
-                        {/* O bloco secundário mostra o que não estiver no cartão principal. */}
-                        {mostraValidacao && (
-                            <>
-                                <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mt-8 mb-3">Estado</h2>
-
-                                <div className="space-y-2">
-                                    {ESTADOS.map((item) => (
-                                        <div key={item.valor} className="flex items-center gap-3">
-                                            <span
-                                                className="w-4 h-4 rounded shrink-0"
-                                                style={{ backgroundColor: item.cor }}
-                                                aria-hidden="true"
-                                            />
-
-                                            <span className="text-white text-sm flex-1">{item.label}</span>
-
-                                            <span className="bg-[#0e2242] rounded-md px-3 py-1 min-w-[70px] text-center text-white text-base font-bold">
-                                                {contagens[item.valor] === undefined ? "—" : formatarNumero(contagens[item.valor])}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-
-                            </>
-                        )}
-
-                        {papel === "admin" && !mostraValidacao && temValidacao && (
-                            <>
-                                <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mt-8 mb-3">
-                                    Validação
-                                </h2>
-
-                                <div className="space-y-2">
-                                    {VALIDACOES.map((item) => (
-                                        <div key={item.valor} className="flex items-center gap-3">
-                                            <span
-                                                className="w-4 h-4 rounded shrink-0"
-                                                style={{ backgroundColor: item.cor }}
-                                                aria-hidden="true"
-                                            />
-
-                                            <span className="text-white text-sm flex-1">{item.label}</span>
-
-                                            <span className="bg-[#0e2242] rounded-md px-3 py-1 min-w-[70px] text-center text-white text-base font-bold">
-                                                {validacoes[item.valor] === undefined ? "—" : formatarNumero(validacoes[item.valor])}
-                                            </span>
-                                        </div>
-                                    ))}
-                                </div>
-
-                                <p className="mt-2 text-[11px] text-white/40 leading-snug">
-                                    Só Boavista tem este campo. Sambizanga não entra nestes números.
-                                </p>
-
                             </>
                         )}
 
@@ -999,7 +899,7 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                                         </div>
 
                                         {CONTROLOS.map((opcao) => {
-                                            // null conta como "Por verificar": são três estados apenas.
+                                            // null conta como "Por verificar": são três ESTADOS apenas.
                                             const atual = (selecionado.controlo ?? VALOR_POR_VERIFICAR) === opcao.valor;
 
                                             return (
@@ -1056,8 +956,8 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                         </div>
 
                         <div className="px-5 py-4 space-y-2">
-                            {emControlo
-                                ? CONTROLOS.map((item) => (
+                            {emControlo ? (
+                                CONTROLOS.map((item) => (
                                       <div key={item.valor} className="flex items-center gap-3">
                                           <span
                                               className="w-4 h-4 rounded shrink-0"
@@ -1074,25 +974,27 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                                           </span>
                                       </div>
                                   ))
-                                : principais.map((item) => (
-                                      <div key={item.valor} className="flex items-center gap-3">
-                                          <span
-                                              className="w-4 h-4 rounded shrink-0"
-                                              style={{ backgroundColor: coresMapa[String(item.valor)] || item.cor }}
-                                              aria-hidden="true"
-                                          />
+                            ) : (
+                                principais.map((item) => (
+                                    <div key={item.valor} className="flex items-center gap-3">
+                                        <span
+                                            className="w-4 h-4 rounded shrink-0"
+                                            style={{ backgroundColor: coresMapa[String(item.valor)] || item.cor }}
+                                            aria-hidden="true"
+                                        />
 
-                                          <span className="text-white text-sm flex-1">
-                                              {rotulosMapa[String(item.valor)] || item.label}
-                                          </span>
+                                        <span className="text-white text-sm flex-1">
+                                            {rotulosMapa[String(item.valor)] || item.label}
+                                        </span>
 
-                                          <span className="bg-[#0e2242] rounded-md px-3 py-1 min-w-[70px] text-center text-white text-base font-bold">
-                                              {contagensPrincipais[item.valor] === undefined
-                                                  ? "—"
-                                                  : formatarNumero(contagensPrincipais[item.valor])}
-                                          </span>
-                                      </div>
-                                  ))}
+                                        <span className="bg-[#0e2242] rounded-md px-3 py-1 min-w-[70px] text-center text-white text-base font-bold">
+                                            {contagensPrincipais[item.valor] === undefined
+                                                ? "—"
+                                                : formatarNumero(contagensPrincipais[item.valor])}
+                                        </span>
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </div>
                 </div>

@@ -6,48 +6,20 @@
 /** Versão instalada do @arcgis/core. Tem de coincidir com o package.json. */
 export const ARCGIS_VERSION = "4.31";
 
-/** Webmap do ArcGIS Online que define o mapa base e a simbologia. */
-export const WEBMAP_ID = "56676e3af62748e29429492cafb1ed23";
+/**
+ * Webmap do ArcGIS Online: define o mapa de fundo e o enquadramento inicial.
+ *
+ * As camadas de trabalho **não vêm deste webmap** — são as de `CAMADAS`, que o
+ * `MapaArcGIS` acrescenta por URL. Trocar de webmap muda o fundo, não os dados.
+ */
+export const WEBMAP_ID = "6b9f7d26963d439aa499c1fc66fa55de";
 
 const BASE = "https://services-eu1.arcgis.com/7r9gTPdSG9MPi1LZ/arcgis/rest/services";
 
+export const CAMPO_AOI = "AOI";
 export const CAMPO_ESTADO = "Estado";
 export const CAMPO_VALIDACAO = "Validacao";
-export const CAMPO_AOI = "AOI";
-/** Identificador estável de cada polígono; sobrevive a republicações da camada. */
-export const CAMPO_GLOBAL_ID = "GlobalId";
-
-/** Campo do serviço onde fica o controlo de verificação. Inteiro, editável. */
 export const CAMPO_CONTROLO = "GGPEN_Controlo";
-
-/**
- * O campo não traz domínio definido no ArcGIS, por isso os códigos são
- * convenção nossa. Se um dia lhe for atribuído um domínio no portal, estes
- * valores têm de coincidir com os de lá.
- *
- * "Por verificar" é o estado de partida e também o de quem viu o polígono e o
- * deixou para uma segunda passagem — inclui portanto os registos a `null`.
- */
-export const VALOR_POR_VERIFICAR = 0;
-export const VALOR_VALIDADO = 1;
-export const VALOR_NAO_VALIDADO = 2;
-
-/** Estados atribuíveis pelo utilizador. */
-export const CONTROLOS: ContagemConfig[] = [
-    { valor: VALOR_VALIDADO, label: "Validado", cor: "#16a34a" },
-    { valor: VALOR_NAO_VALIDADO, label: "Não validado", cor: "#dc2626" },
-    { valor: VALOR_POR_VERIFICAR, label: "Por verificar", cor: "#ffd166" },
-];
-
-/**
- * "Por verificar" apanha o zero **e** o nulo: são três estados apenas, e os
- * registos em que ninguém tocou entram nessa contagem.
- */
-export function condicaoControlo(valor: number): string {
-    return valor === VALOR_POR_VERIFICAR
-        ? `(${CAMPO_CONTROLO} IS NULL OR ${CAMPO_CONTROLO} = ${VALOR_POR_VERIFICAR})`
-        : `${CAMPO_CONTROLO} = ${valor}`;
-}
 
 export interface CamadaConfig {
     id: string;
@@ -55,34 +27,23 @@ export interface CamadaConfig {
     url: string;
     /** Visibilidade inicial no mapa. Omitido = visível. */
     visivelPorOmissao?: boolean;
-    /**
-     * Campo pelo qual o renderer do webmap colore esta camada.
-     * Só as camadas de edifícios o têm; os contornos ficam sem.
-     */
-    campoSimbologia?: typeof CAMPO_VALIDACAO | typeof CAMPO_ESTADO;
-    /**
-     * Condição SQL aplicada sempre, antes de qualquer filtro do utilizador.
-     * O que ficar de fora não é desenhado nem contado em lado nenhum.
-     */
+    /** Campo pelo qual a camada é classificada. Só as de edifícios o têm. */
+    campoSimbologia?: string;
+    /** Condição SQL aplicada sempre, antes de qualquer filtro do utilizador. */
     filtroBase?: string;
 }
 
-/**
- * Camada que alimenta filtros e indicadores.
- * É a de Boavista & Porto Seco — a de Sambizanga tem AOI, Tipologia,
- * T_Constru e Afetacao por preencher, logo não serve para filtrar.
- */
+/** Camada principal: edifícios de Boavista. */
 export const CAMADA_DADOS: CamadaConfig = {
     id: "residencias-em-risco",
     titulo: "Edifícios — Boavista",
     url: `${BASE}/RESIDENCIAS_EM_RISCO/FeatureServer/0`,
-    campoSimbologia: CAMPO_VALIDACAO,
-    // Restringe a camada a Boavista. Porto Seco da Mulemba e os registos com AOI
-    // em branco deixam de ser desenhados e de entrar em qualquer contagem.
+    campoSimbologia: CAMPO_ESTADO,
+    // Porto Seco da Mulemba e os registos com AOI em branco ficam de fora.
     filtroBase: `${CAMPO_AOI} = 'Boavista'`,
 };
 
-/** Segundo levantamento. Não tem o campo Validacao; o renderer usa Estado. */
+/** Segundo levantamento, com estrutura própria. */
 export const CAMADA_SAMBIZANGA: CamadaConfig = {
     id: "edificios-sambizanga",
     titulo: "Edifícios — Sambizanga",
@@ -98,9 +59,7 @@ export const CAMADAS_LIMITE: CamadaConfig[] = [
         id: "porto-seco-mulemba",
         titulo: "Porto Seco da Mulemba",
         url: `${BASE}/Porto_Seco_Mulemba/FeatureServer/0`,
-        // O webmap traz esta camada ligada; escondemo-la para Porto Seco não
-        // aparecer de forma nenhuma, já que os seus edifícios também estão fora
-        // pelo filtroBase de CAMADA_DADOS.
+        // Porto Seco está fora do painel: os edifícios pelo filtroBase, o contorno aqui.
         visivelPorOmissao: false,
     },
 ];
@@ -120,16 +79,12 @@ export interface AreaConfig {
 }
 
 /**
- * As áreas não vivem todas no mesmo sítio: Boavista e Porto Seco são valores
- * do campo AOI numa camada; Sambizanga é uma camada à parte, cujo AOI está vazio.
- * Este mapeamento esconde essa diferença da interface.
+ * As áreas não vivem todas no mesmo sítio: Boavista é um valor do campo AOI numa
+ * camada; Sambizanga é uma camada à parte, cujo AOI está vazio.
  */
 export const AREAS: AreaConfig[] = [
     { id: "boavista", label: "Boavista", camadaId: CAMADA_DADOS.id, aoi: "Boavista" },
     { id: "sambizanga", label: "Sambizanga e novas áreas", camadaId: CAMADA_SAMBIZANGA.id },
-    // Porto Seco da Mulemba existe no campo AOI e continua a ser desenhado no mapa,
-    // mas foi retirado da lista de áreas a pedido. Para o repor, basta descomentar:
-    // { id: "porto-seco", label: "Porto Seco da Mulemba", camadaId: CAMADA_DADOS.id, aoi: "Porto Seco da Mulemba" },
 ];
 
 export interface FiltroConfig {
@@ -156,29 +111,46 @@ export interface ContagemConfig {
     cor: string;
 }
 
-/**
- * Domínio do campo Estado.
- * Cores tiradas do renderer da camada "Edifícios — Sambizanga" no webmap:
- * é essa que o mapa desenha por Estado.
- */
+/** Símbolo por omissão dos renderers: o que não encaixa em nenhum valor conhecido. */
+export const COR_POR_OMISSAO = "#999999";
+
+/** Domínio do campo Estado, tal como definido no serviço. */
 export const ESTADOS: ContagemConfig[] = [
     { valor: 0, label: "Não Inscritos", cor: "#f0270c" },
     { valor: 1, label: "Pendente", cor: "#e1da14" },
     { valor: 2, label: "Inscritos", cor: "#5dd618" },
 ];
 
-/** Símbolo por omissão dos renderers: aplica-se ao que não encaixa em nenhum valor conhecido. */
-export const COR_POR_OMISSAO = "#999999";
-
-/**
- * Domínio do campo Validacao — 0: Outros, 1: Primária, 2: Secundária.
- * Cores tiradas do renderer de `CAMADA_DADOS` no webmap; "Outros" é o símbolo por omissão.
- */
+/** Domínio do campo Validacao — mantido para referência; sem modo próprio na UI. */
 export const VALIDACOES: ContagemConfig[] = [
     { valor: 1, label: "Primária", cor: "#fd7f6f" },
     { valor: 2, label: "Secundária", cor: "#7eb0d5" },
     { valor: 0, label: "Outros", cor: "#999999" },
 ];
+
+/**
+ * Controlo de verificação, gravado em `GGPEN_Controlo`. O campo não tem domínio
+ * no portal, por isso os códigos são convenção nossa.
+ *
+ * "Por verificar" é o estado de partida e também o de quem viu o polígono e o
+ * deixou para uma segunda passagem — inclui os registos a `null`.
+ */
+export const VALOR_POR_VERIFICAR = 0;
+export const VALOR_VALIDADO = 1;
+export const VALOR_NAO_VALIDADO = 2;
+
+export const CONTROLOS: ContagemConfig[] = [
+    { valor: VALOR_VALIDADO, label: "Validado", cor: "#16a34a" },
+    { valor: VALOR_NAO_VALIDADO, label: "Não validado", cor: "#dc2626" },
+    { valor: VALOR_POR_VERIFICAR, label: "Por verificar", cor: "#ffd166" },
+];
+
+/** "Por verificar" apanha o zero e o nulo. */
+export function condicaoControlo(valor: number): string {
+    return valor === VALOR_POR_VERIFICAR
+        ? `(${CAMPO_CONTROLO} IS NULL OR ${CAMPO_CONTROLO} = ${VALOR_POR_VERIFICAR})`
+        : `${CAMPO_CONTROLO} = ${valor}`;
+}
 
 /** Duplica plicas — o where vai para SQL do lado do servidor. */
 export function escaparSql(valor: string): string {
