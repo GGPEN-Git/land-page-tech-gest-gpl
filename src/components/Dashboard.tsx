@@ -85,6 +85,9 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda }: Dashbo
 
     const [opcoes, setOpcoes] = useState<Record<string, string[]>>({});
     const [contagens, setContagens] = useState<Record<number, number>>({});
+    /** Contagens por categoria de conformidade, calculadas no browser. */
+    const [conformidades, setConformidades] = useState<Record<string, number>>({});
+    const [aContarConformidade, setAContarConformidade] = useState(false);
 
     /** Cores e rótulos lidos do renderer em uso, para a legenda nunca mentir sobre o mapa. */
     const [coresMapa, setCoresMapa] = useState<Record<string, string>>({});
@@ -261,6 +264,87 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda }: Dashbo
         const temporizador = setTimeout(() => setAviso(null), 4000);
         return () => clearTimeout(temporizador);
     }, [aviso]);
+
+    /**
+     * Contagens por conformidade, no modo Webmap.
+     *
+     * Tem de ser no browser: duas das regras contam elementos separados por
+     * vírgula (`Count(Split(...))` no Arcade), e isso não existe em SQL. Traz-se
+     * apenas os cinco campos de que as regras precisam, em páginas de 2000.
+     */
+    useEffect(() => {
+        if (colorirPor !== "webmap" || !camadasProntas) {
+            setConformidades({});
+            return;
+        }
+
+        let cancelado = false;
+
+        const efetivas = area?.aoi ? { ...selecoes, [CAMPO_AOI]: area.aoi } : selecoes;
+
+        const whereDe = (config: (typeof CAMADAS_EDIFICIOS)[number]) => {
+            const clausula = construirWhere(efetivas);
+            return config.filtroBase ? comCondicao(clausula, config.filtroBase) : clausula;
+        };
+
+        const CAMPOS = ["Estado", "Num_Edif", "NIF_Prop", "Tipologia", "Afetacao"];
+        const PAGINA = 2000;
+
+        async function contar() {
+            setAContarConformidade(true);
+
+            const totais: Record<string, number> = {};
+
+            try {
+                for (const config of configsAtivas) {
+                    const layer = camadas[config.id];
+                    if (!layer) continue;
+
+                    const disponiveis = CAMPOS.filter((c) => layer.fields?.some((f) => f.name === c));
+
+                    let inicio = 0;
+
+                    // Pagina até o servidor deixar de devolver uma página cheia.
+                    for (;;) {
+                        const resposta = await layer.queryFeatures({
+                            where: whereDe(config),
+                            outFields: disponiveis,
+                            returnGeometry: false,
+                            start: inicio,
+                            num: PAGINA,
+                            orderByFields: [layer.objectIdField],
+                        });
+
+                        if (cancelado) return;
+
+                        for (const feicao of resposta.features) {
+                            const id = classificar(feicao.attributes).id;
+                            totais[id] = (totais[id] || 0) + 1;
+                        }
+
+                        if (resposta.features.length < PAGINA) break;
+                        inicio += PAGINA;
+                    }
+                }
+
+                if (!cancelado) setConformidades(totais);
+            } catch (e) {
+                if (cancelado) return;
+
+                console.error("Falha ao contar a conformidade:", e);
+                setConformidades({});
+            } finally {
+                if (!cancelado) setAContarConformidade(false);
+            }
+        }
+
+        contar();
+
+        return () => {
+            cancelado = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [camadas, camadasProntas, chaveCamadas, area, selecoes, colorirPor]);
 
     /** Contagens por estado de controlo, restringidas pelos filtros em vigor. */
     useEffect(() => {
@@ -975,7 +1059,29 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda }: Dashbo
                         </div>
 
                         <div className="px-5 py-4 space-y-2">
-                            {emControlo ? (
+                            {colorirPor === "webmap" ? (
+                                // A legenda do webmap é a da expressão de conformidade,
+                                // que é o que está de facto desenhado.
+                                CONFORMIDADES.filter((item) => item.desenhada).map((item) => (
+                                    <div key={item.id} className="flex items-start gap-3">
+                                        <span
+                                            className="w-4 h-4 rounded-sm shrink-0 mt-0.5 border-2"
+                                            style={{ borderColor: item.cor }}
+                                            aria-hidden="true"
+                                        />
+
+                                        <span className="text-white text-xs leading-snug flex-1">{item.resumo}</span>
+
+                                        <span className="bg-[#0e2242] rounded-md px-2 py-1 min-w-[64px] text-center text-white text-sm font-bold shrink-0">
+                                            {conformidades[item.id] === undefined
+                                                ? aContarConformidade
+                                                    ? "…"
+                                                    : "0"
+                                                : formatarNumero(conformidades[item.id])}
+                                        </span>
+                                    </div>
+                                ))
+                            ) : emControlo ? (
                                 CONTROLOS.map((item) => (
                                       <div key={item.valor} className="flex items-center gap-3">
                                           <span

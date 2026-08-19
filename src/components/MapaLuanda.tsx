@@ -6,7 +6,7 @@ import FeatureLayer from "@arcgis/core/layers/FeatureLayer";
 import "@arcgis/core/assets/esri/themes/light/main.css";
 
 import { ARCGIS_VERSION, normalizarUrl, urlCompletaDaCamada } from "../lib/arcgis";
-import { CAMADAS_MODULO, WEBMAP_LUANDA } from "../lib/luanda";
+import { CAMADA_LUANDA, WEBMAP_LUANDA } from "../lib/luanda";
 
 esriConfig.assetsPath = `https://js.arcgis.com/${ARCGIS_VERSION}/@arcgis/core/assets`;
 
@@ -14,8 +14,8 @@ interface MapaLuandaProps {
     /** Tem de trazer posicionamento e tamanho — o mapa herda daqui a altura. */
     className?: string;
     onViewReady?: (view: MapView) => void;
-    /** Devolve as camadas do módulo, indexadas pelo id de `CAMADAS_MODULO`. */
-    onCamadas?: (camadas: Record<string, FeatureLayer>) => void;
+    /** Devolve a camada do módulo, já carregada. */
+    onCamada?: (camada: FeatureLayer) => void;
 }
 
 /**
@@ -25,7 +25,7 @@ interface MapaLuandaProps {
  * mudar de webmap, de camadas ou de comportamento sem risco para o painel
  * principal. O preço é alguma repetição, que aqui compensa.
  */
-export function MapaLuanda({ className = "absolute inset-0", onViewReady, onCamadas }: MapaLuandaProps) {
+export function MapaLuanda({ className = "absolute inset-0", onViewReady, onCamada }: MapaLuandaProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [erro, setErro] = useState<string | null>(null);
     const [aCarregar, setACarregar] = useState(true);
@@ -60,36 +60,28 @@ export function MapaLuanda({ className = "absolute inset-0", onViewReady, onCama
                     if (url) porUrl.set(normalizarUrl(url), featureLayer);
                 }
 
-                const porId: Record<string, FeatureLayer> = {};
+                let camada = porUrl.get(normalizarUrl(CAMADA_LUANDA.url));
 
-                for (const config of CAMADAS_MODULO) {
-                    const chave = normalizarUrl(config.url);
-                    let camada = porUrl.get(chave);
+                if (!camada) {
+                    camada = new FeatureLayer({
+                        id: CAMADA_LUANDA.id,
+                        title: CAMADA_LUANDA.titulo,
+                        url: CAMADA_LUANDA.url,
+                        popupEnabled: true,
+                    });
 
-                    if (!camada) {
-                        camada = new FeatureLayer({
-                            id: config.id,
-                            title: config.titulo,
-                            url: config.url,
-                            popupEnabled: true,
-                        });
-
-                        webmap.add(camada);
-                    }
-
-                    porId[config.id] = camada;
+                    webmap.add(camada);
                 }
 
-                await Promise.all(Object.values(porId).map((camada) => camada.load().catch(() => null)));
+                await camada.load();
 
                 // Sem "*", o popup e o hitTest só devolvem os campos do portal.
-                for (const camada of Object.values(porId)) {
-                    camada.outFields = ["*"];
-                }
+                camada.outFields = ["*"];
+                camada.visible = true;
 
-                if (!cancelado) onCamadas?.(porId);
+                if (!cancelado) onCamada?.(camada);
             } catch (e) {
-                console.error("Falha ao carregar as camadas do módulo Luanda:", e);
+                console.error("Falha ao carregar a camada de Luanda:", e);
             }
 
             if (cancelado) return;

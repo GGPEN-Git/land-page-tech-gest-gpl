@@ -8,7 +8,12 @@ import { MapaLuanda } from "./MapaLuanda";
 import { asset } from "../lib/utils";
 import { criarRenderer, lerLegenda } from "../lib/simbologia";
 import { comCondicao, construirWhere, formatarNumero } from "../lib/arcgis";
-import { AREAS_LUANDA, CAMADAS_MODULO } from "../lib/luanda";
+import {
+    CAMPO_INSCRICAO,
+    FILTRO_BASE_LUANDA,
+    FILTROS_LUANDA,
+    INSCRICOES,
+} from "../lib/luanda";
 
 const LARGURA_ABA = 320;
 
@@ -17,15 +22,14 @@ interface PainelLuandaProps {
 }
 
 /**
- * Módulo Luanda: webmap e camadas próprios.
+ * Módulo do município de Sambizanga, sobre a camada `Luanda_Nova_gdb`.
  *
- * Cada área traz a sua camada, os seus filtros e o seu campo de contagem — as
- * fichas de campos não coincidem, por isso a troca de área troca tudo isso.
+ * A camada cobre toda a província; o `FILTRO_BASE_LUANDA` restringe-a a
+ * Sambizanga — que inclui o bairro Boa Vista — e a interface não o remove.
  */
 export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
     const [abaAberta, setAbaAberta] = useState(true);
     const [filtroAberto, setFiltroAberto] = useState<string | null>(null);
-    const [areaId, setAreaId] = useState<string>(AREAS_LUANDA[0].id);
     const [selecoes, setSelecoes] = useState<Record<string, string>>({});
     const [simbologiaDoWebmap, setSimbologiaDoWebmap] = useState(true);
 
@@ -36,72 +40,49 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
     const [rotulosMapa, setRotulosMapa] = useState<Record<string, string>>({});
     const [escala, setEscala] = useState<number | null>(null);
 
-    const [camadas, setCamadas] = useState<Record<string, FeatureLayer>>({});
+    const [camada, setCamada] = useState<FeatureLayer | null>(null);
     const [aConsultar, setAConsultar] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
 
-    /** Renderers tal como vieram do webmap, por camada, para os poder repor. */
-    const renderersOriginaisRef = useRef<Record<string, FeatureLayer["renderer"]>>({});
+    const rendererOriginalRef = useRef<FeatureLayer["renderer"] | null>(null);
     const viewRef = useRef<MapView | null>(null);
     const viewpointInicialRef = useRef<Viewpoint | null>(null);
+    /** A primeira consulta enquadra sempre: é o que traz a câmara a Sambizanga. */
     const primeiraConsultaRef = useRef(true);
-
-    const area = AREAS_LUANDA.find((a) => a.id === areaId) || AREAS_LUANDA[0];
-    const camada = camadas[area.camada.id] || null;
 
     const handleViewReady = useCallback((view: MapView) => {
         viewRef.current = view;
         viewpointInicialRef.current = view.viewpoint.clone();
         setEscala(view.scale);
 
-        // As camadas têm minScale: acima dele o ArcGIS esconde-as, e o utilizador
-        // fica a ver o mapa vazio sem perceber porquê.
+        // A camada tem minScale: acima dele o ArcGIS esconde-a, e o mapa parece vazio.
         view.watch("scale", (nova: number) => setEscala(nova));
     }, []);
 
-    const handleCamadas = useCallback((encontradas: Record<string, FeatureLayer>) => {
-        setCamadas(encontradas);
+    const handleCamada = useCallback((encontrada: FeatureLayer) => {
+        setCamada(encontrada);
     }, []);
 
-    // Trocar de área invalida as escolhas: os campos de cada camada são outros.
-    useEffect(() => {
-        setSelecoes({});
-        setFiltroAberto(null);
-    }, [areaId]);
-
-    // Só a camada da área escolhida fica visível; as outras ficam sem filtro.
-    useEffect(() => {
-        for (const config of CAMADAS_MODULO) {
-            const layer = camadas[config.id];
-            if (!layer) continue;
-
-            const ativa = config.id === area.camada.id;
-            layer.visible = ativa;
-
-            if (!ativa) layer.definitionExpression = "";
-        }
-    }, [camadas, area]);
-
-    // Simbologia: a do portal, ou a nossa construída a partir dos valores da área.
+    // Simbologia: a do portal, ou a nossa construída a partir de INSCRICOES.
     useEffect(() => {
         if (!camada) return;
 
-        if (!(area.camada.id in renderersOriginaisRef.current)) {
-            renderersOriginaisRef.current[area.camada.id] = camada.renderer;
+        if (rendererOriginalRef.current === null) {
+            rendererOriginalRef.current = camada.renderer;
         }
 
-        const doWebmap = renderersOriginaisRef.current[area.camada.id];
+        const doWebmap = rendererOriginalRef.current;
 
         // Nunca atribuir um renderer vazio: a camada deixaria de ser desenhada.
         camada.renderer =
-            simbologiaDoWebmap && doWebmap ? doWebmap : criarRenderer(area.campoContagem, area.valores);
+            simbologiaDoWebmap && doWebmap ? doWebmap : criarRenderer(CAMPO_INSCRICAO, INSCRICOES);
 
         const legenda = lerLegenda(camada.renderer);
-        const aplicavel = legenda.campo === area.campoContagem;
+        const aplicavel = legenda.campo === CAMPO_INSCRICAO;
 
         setCoresMapa(aplicavel ? legenda.cores : {});
         setRotulosMapa(aplicavel ? legenda.rotulos : {});
-    }, [camada, area, simbologiaDoWebmap]);
+    }, [camada, simbologiaDoWebmap]);
 
     // Filtro, opções em cascata e contagens.
     useEffect(() => {
@@ -109,22 +90,16 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
 
         let cancelado = false;
 
-        const base = area.camada.filtroBase;
-        const comBase = (clausula: string) => (base ? comCondicao(clausula, base) : clausula);
+        const comBase = (clausula: string) => comCondicao(clausula, FILTRO_BASE_LUANDA);
         const where = comBase(construirWhere(selecoes));
 
         camada.definitionExpression = where;
         setAConsultar(true);
 
-        /** Leva a câmara ao que ficou filtrado; sem filtros, à extensão da camada. */
+        /** Leva a câmara ao que está filtrado — incluindo à entrada, para chegar a Sambizanga. */
         async function enquadrar(layer: FeatureLayer, clausula: string) {
             const view = viewRef.current;
             if (!view) return;
-
-            if (primeiraConsultaRef.current) {
-                primeiraConsultaRef.current = false;
-                return;
-            }
 
             try {
                 const { count, extent } = await layer.queryExtent({ where: clausula });
@@ -132,25 +107,25 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
                 if (cancelado || count === 0 || !extent) return;
 
                 await view.goTo(extent.expand(1.2));
+                primeiraConsultaRef.current = false;
             } catch (e) {
                 console.debug("Não foi possível enquadrar a seleção:", e);
             }
         }
 
         /**
-         * Contagens e opções correm em paralelo e não esperam umas pelas outras.
-         * Na camada de Luanda, com dois milhões de registos, as consultas de
-         * valores distintos são lentas — e antes prendiam os números do cartão.
+         * Contagens e opções correm em paralelo. As consultas de valores distintos
+         * são lentas nesta camada, e antes prendiam os números do cartão.
          */
         async function carregarContagens(layer: FeatureLayer) {
             try {
                 const totais = await Promise.all(
-                    area.valores.map(
-                        async (v) =>
+                    INSCRICOES.map(
+                        async (i) =>
                             [
-                                v.valor,
+                                i.valor,
                                 await layer.queryFeatureCount({
-                                    where: comCondicao(where, `${area.campoContagem} = ${v.valor}`),
+                                    where: comCondicao(where, `${CAMPO_INSCRICAO} = ${i.valor}`),
                                 }),
                             ] as const,
                     ),
@@ -176,7 +151,7 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
         async function carregarOpcoes(layer: FeatureLayer) {
             try {
                 const listas = await Promise.all(
-                    area.filtros.map(async (filtro) => {
+                    FILTROS_LUANDA.map(async (filtro) => {
                         const resultado = await layer.queryFeatures({
                             where: comBase(construirWhere(selecoes, filtro.campo)),
                             outFields: [filtro.campo],
@@ -209,7 +184,7 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
         return () => {
             cancelado = true;
         };
-    }, [camada, area, selecoes]);
+    }, [camada, selecoes]);
 
     function selecionar(campo: string, valor: string | null) {
         setSelecoes((atual) => {
@@ -242,7 +217,6 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
     }
 
     const filtrosAtivos = Object.keys(selecoes).length;
-    const areaAberta = filtroAberto === "area";
 
     const minScale = camada?.minScale || 0;
     const longeDemais = !!escala && minScale > 0 && escala > minScale;
@@ -272,7 +246,7 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
                         </div>
 
                         <h1 className="text-white text-xs md:text-sm font-semibold leading-tight truncate">
-                            Cadastro de Luanda
+                            Cadastro — Município de Sambizanga
                         </h1>
                     </div>
 
@@ -293,45 +267,7 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
                     <div className="h-full overflow-y-auto px-6 py-6" style={{ width: LARGURA_ABA }}>
                         <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mb-3">Filtros</h2>
 
-                        {/* ÁREA troca a camada, e com ela os filtros e as contagens. */}
-                        <div className="border-b border-white/10">
-                            <button
-                                type="button"
-                                onClick={() => setFiltroAberto(areaAberta ? null : "area")}
-                                aria-expanded={areaAberta}
-                                className="w-full flex items-center justify-between gap-3 py-3 text-white text-sm hover:text-[#7fb3e0] transition-colors"
-                            >
-                                <span className="text-left">ÁREA</span>
-
-                                <span className="flex items-center gap-2 shrink-0">
-                                    <span className="max-w-[110px] truncate text-xs text-[#7fb3e0]">{area.label}</span>
-                                    <ChevronDown
-                                        className={`w-4 h-4 transition-transform ${areaAberta ? "rotate-180" : ""}`}
-                                    />
-                                </span>
-                            </button>
-
-                            {areaAberta && (
-                                <div className="pb-3 space-y-1">
-                                    {AREAS_LUANDA.map((opcao) => (
-                                        <button
-                                            key={opcao.id}
-                                            type="button"
-                                            onClick={() => setAreaId(opcao.id)}
-                                            className={`w-full text-left px-3 py-1.5 rounded text-xs transition-colors ${
-                                                areaId === opcao.id
-                                                    ? "bg-[#1e6fd9] text-white"
-                                                    : "text-white/80 hover:bg-white/10"
-                                            }`}
-                                        >
-                                            {opcao.label}
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        {area.filtros.map((filtro) => {
+                        {FILTROS_LUANDA.map((filtro) => {
                             const aberto = filtroAberto === filtro.id;
                             const lista = opcoes[filtro.campo] || [];
                             const escolhido = selecoes[filtro.campo];
@@ -416,7 +352,7 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
                         <div className="flex rounded-lg bg-[#0e2242] p-1">
                             {[
                                 { doWebmap: true, label: "Webmap" },
-                                { doWebmap: false, label: area.campoContagem },
+                                { doWebmap: false, label: "Inscrição" },
                             ].map((opcao) => (
                                 <button
                                     key={opcao.label}
@@ -433,14 +369,17 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
                             ))}
                         </div>
 
-                        <p className="mt-6 text-[11px] text-white/40 leading-snug">Camada: {area.camada.titulo}.</p>
+                        <p className="mt-6 text-[11px] text-white/40 leading-snug">
+                            Restrito ao município de Sambizanga, que inclui o bairro Boa Vista. O campo Inscrição não tem
+                            domínio no portal, por isso os rótulos são os próprios códigos.
+                        </p>
 
                         {erro && <p className="mt-4 text-xs text-[#e08a8a]">{erro}</p>}
                     </div>
                 </motion.aside>
 
                 <div className="relative flex-1">
-                    <MapaLuanda className="absolute inset-0 z-0" onViewReady={handleViewReady} onCamadas={handleCamadas} />
+                    <MapaLuanda className="absolute inset-0 z-0" onViewReady={handleViewReady} onCamada={handleCamada} />
 
                     {longeDemais && (
                         <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 max-w-[90%]">
@@ -499,12 +438,12 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
 
                     <div className="absolute bottom-10 right-6 z-10 w-[250px] max-w-[calc(100%-3rem)] bg-[#0b1c38]/95 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden">
                         <div className="bg-[#12294d] px-5 py-4">
-                            <p className="text-white/70 text-sm truncate">{area.label}</p>
+                            <p className="text-white/70 text-sm truncate">{selecoes.Bairro || "Sambizanga"}</p>
                             <p className="text-white text-2xl font-bold tracking-wide">LUANDA</p>
                         </div>
 
                         <div className="px-5 py-4 space-y-2">
-                            {area.valores.map((item) => (
+                            {INSCRICOES.map((item) => (
                                 <div key={item.valor} className="flex items-center gap-3">
                                     <span
                                         className="w-4 h-4 rounded shrink-0"
@@ -518,8 +457,7 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
 
                                     <span className="bg-[#0e2242] rounded-md px-2 py-1 min-w-[70px] text-center text-white text-sm font-bold">
                                         {contagens[item.valor] === undefined
-                                            ? // Distingue "ainda a contar" de "sem resposta".
-                                              aConsultar
+                                            ? aConsultar
                                                 ? "…"
                                                 : "—"
                                             : formatarNumero(contagens[item.valor])}
