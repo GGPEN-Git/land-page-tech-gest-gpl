@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ChevronDown, ChevronLeft, ChevronRight, Home, Minus, Plus, RotateCcw, SquarePen } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Home, Map, Minus, Plus, RotateCcw, SquarePen } from "lucide-react";
 import Graphic from "@arcgis/core/Graphic";
 import type MapView from "@arcgis/core/views/MapView";
 import type Viewpoint from "@arcgis/core/Viewpoint";
@@ -38,9 +38,11 @@ interface DashboardProps {
     utilizador: Utilizador | null;
     onLogout?: () => void;
     papel?: Papel;
+    /** Abre o módulo de Luanda, que é independente deste painel. */
+    onAbrirLuanda?: () => void;
 }
 
-export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
+export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda }: DashboardProps) {
     const [abaAberta, setAbaAberta] = useState(true);
     const [gestaoAberta, setGestaoAberta] = useState(false);
     const [senhaAberta, setSenhaAberta] = useState(false);
@@ -53,11 +55,11 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
     /**
      * Como colorir os edifícios: "webmap" mantém a simbologia definida no ArcGIS
      * Online — assim qualquer alteração feita no portal aparece aqui sem tocar no código.
-     * Por omissão usa-se "Inscrição", que é o campo por que o webmap está pintado.
+     * Por omissão usa-se "Estado", que é o campo com dados em ambas as camadas.
      */
     const [colorirPor, setColorirPor] = useState<"webmap" | "controlo" | typeof CAMPO_ESTADO>(CAMPO_ESTADO);
 
-    // Força "Inscrição" para utilizadores não-admin e impede alteração.
+    // Força "Estado" para utilizadores não-admin e impede alteração.
     useEffect(() => {
         if (papel !== "admin" && colorirPor !== CAMPO_ESTADO) {
             setColorirPor(CAMPO_ESTADO);
@@ -563,6 +565,21 @@ export function Dashboard({ utilizador, onLogout, papel }: DashboardProps) {
                     aria-hidden={!abaAberta}
                 >
                     <div className="h-full overflow-y-auto px-6 py-6" style={{ width: LARGURA_ABA }}>
+                        {papel === "admin" && onAbrirLuanda && (
+                            <button
+                                type="button"
+                                onClick={onAbrirLuanda}
+                                className="w-full flex items-center justify-between gap-2 rounded-md bg-[#12294d] px-3 py-2.5 mb-6 text-sm text-white hover:bg-[#1a3a63] transition-colors"
+                            >
+                                <span className="flex items-center gap-2">
+                                    <Map className="w-4 h-4 shrink-0" />
+                                    Cadastro de Luanda
+                                </span>
+
+                                <ChevronRight className="w-4 h-4 shrink-0 text-white/50" />
+                            </button>
+                        )}
+
                         <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mb-3">Filtros</h2>
 
                         {/* ÁREA — pode trocar de camada, por isso não passa pelo ciclo dos outros

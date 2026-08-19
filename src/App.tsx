@@ -8,11 +8,12 @@ import { Community } from "./components/Community";
 import { Footer } from "./components/Footer";
 import { Login } from "./components/Login";
 import { Dashboard } from "./components/Dashboard";
+import { PainelLuanda } from "./components/PainelLuanda";
 import { Button } from "./components/ui/Button";
 import { asset } from "./lib/utils";
 import { sessaoAtual, terminarSessao, type Utilizador } from "./lib/api";
 export function App() {
-    const [view, setView] = useState<"landing" | "login" | "dashboard">("landing");
+    const [view, setView] = useState<"landing" | "login" | "dashboard" | "luanda">("landing");
     const [utilizador, setUtilizador] = useState<Utilizador | null>(null);
 
     // Sessão em cookie: ao recarregar a página perguntamos ao servidor se ainda é válida.
@@ -49,8 +50,20 @@ export function App() {
         );
     }
 
+    // Módulo à parte: webmap, camada e filtros próprios, sem ligação ao painel principal.
+    if (view === "luanda") {
+        return <PainelLuanda onVoltar={() => setView("dashboard")} />;
+    }
+
     if (view === "dashboard") {
-        return <Dashboard utilizador={utilizador} onLogout={sair} papel={utilizador?.papel} />;
+        return (
+            <Dashboard
+                utilizador={utilizador}
+                onLogout={sair}
+                papel={utilizador?.papel}
+                onAbrirLuanda={() => setView("luanda")}
+            />
+        );
     }
 
     return (

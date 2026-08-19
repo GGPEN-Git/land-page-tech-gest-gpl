@@ -6,13 +6,8 @@
 /** Versão instalada do @arcgis/core. Tem de coincidir com o package.json. */
 export const ARCGIS_VERSION = "4.31";
 
-/**
- * Webmap do ArcGIS Online: define o mapa de fundo e o enquadramento inicial.
- *
- * As camadas de trabalho **não vêm deste webmap** — são as de `CAMADAS`, que o
- * `MapaArcGIS` acrescenta por URL. Trocar de webmap muda o fundo, não os dados.
- */
-export const WEBMAP_ID = "6b9f7d26963d439aa499c1fc66fa55de";
+/** Webmap do ArcGIS Online que define o mapa base e a simbologia. */
+export const WEBMAP_ID = "56676e3af62748e29429492cafb1ed23";
 
 const BASE = "https://services-eu1.arcgis.com/7r9gTPdSG9MPi1LZ/arcgis/rest/services";
 

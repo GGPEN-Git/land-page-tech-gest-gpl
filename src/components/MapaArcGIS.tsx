@@ -5,7 +5,7 @@ import MapView from "@arcgis/core/views/MapView";
 import FeatureLayer from "@arcgis/core/layers/FeatureLayer";
 import "@arcgis/core/assets/esri/themes/light/main.css";
 
-import { ARCGIS_VERSION, CAMADAS, CAMADA_DADOS, WEBMAP_ID, normalizarUrl, urlCompletaDaCamada } from "../lib/arcgis";
+import { ARCGIS_VERSION, CAMADAS, WEBMAP_ID, normalizarUrl, urlCompletaDaCamada } from "../lib/arcgis";
 
 // Os ícones e fontes do SDK vêm do CDN, para não ser preciso copiar os assets no build.
 esriConfig.assetsPath = `https://js.arcgis.com/${ARCGIS_VERSION}/@arcgis/core/assets`;
@@ -91,8 +91,6 @@ export function MapaArcGIS({ className = "absolute inset-0", onViewReady, onCama
                 for (const camada of Object.values(porId)) {
                     camada.outFields = ["*"];
                 }
-
-                if (!porId[CAMADA_DADOS.id]) console.warn("Camada de dados ausente:", CAMADA_DADOS.url);
 
                 if (!cancelado) onCamadas?.(porId);
             } catch (e) {
