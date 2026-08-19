@@ -6,7 +6,7 @@ import FeatureLayer from "@arcgis/core/layers/FeatureLayer";
 import "@arcgis/core/assets/esri/themes/light/main.css";
 
 import { ARCGIS_VERSION, normalizarUrl, urlCompletaDaCamada } from "../lib/arcgis";
-import { ID_CAMADA_LUANDA, TITULO_LUANDA, URL_LUANDA, WEBMAP_LUANDA } from "../lib/luanda";
+import { CAMADAS_MODULO, WEBMAP_LUANDA } from "../lib/luanda";
 
 esriConfig.assetsPath = `https://js.arcgis.com/${ARCGIS_VERSION}/@arcgis/core/assets`;
 
@@ -14,17 +14,18 @@ interface MapaLuandaProps {
     /** Tem de trazer posicionamento e tamanho — o mapa herda daqui a altura. */
     className?: string;
     onViewReady?: (view: MapView) => void;
-    onCamada?: (camada: FeatureLayer) => void;
+    /** Devolve as camadas do módulo, indexadas pelo id de `CAMADAS_MODULO`. */
+    onCamadas?: (camadas: Record<string, FeatureLayer>) => void;
 }
 
 /**
  * Mapa do módulo Luanda.
  *
  * É um componente à parte do `MapaArcGIS` de propósito: assim este módulo pode
- * mudar de webmap, de camada ou de comportamento sem risco nenhum para o painel
+ * mudar de webmap, de camadas ou de comportamento sem risco para o painel
  * principal. O preço é alguma repetição, que aqui compensa.
  */
-export function MapaLuanda({ className = "absolute inset-0", onViewReady, onCamada }: MapaLuandaProps) {
+export function MapaLuanda({ className = "absolute inset-0", onViewReady, onCamadas }: MapaLuandaProps) {
     const containerRef = useRef<HTMLDivElement>(null);
     const [erro, setErro] = useState<string | null>(null);
     const [aCarregar, setACarregar] = useState(true);
@@ -49,44 +50,46 @@ export function MapaLuanda({ className = "absolute inset-0", onViewReady, onCama
             try {
                 await webmap.loadAll();
 
-                // A camada costuma vir dentro do webmap; se faltar, acrescenta-se.
-                let camada = webmap.allLayers
-                    .toArray()
-                    .map((c) => c as FeatureLayer)
-                    .find((c) => {
-                        const url = urlCompletaDaCamada(c);
-                        return url ? normalizarUrl(url) === normalizarUrl(URL_LUANDA) : false;
-                    });
+                // Indexa o que o webmap já traz, para não duplicar camadas.
+                const porUrl = new Map<string, FeatureLayer>();
 
-                if (!camada) {
-                    camada = new FeatureLayer({
-                        id: ID_CAMADA_LUANDA,
-                        title: TITULO_LUANDA,
-                        url: URL_LUANDA,
-                        popupEnabled: true,
-                    });
+                for (const camada of webmap.allLayers.toArray()) {
+                    const featureLayer = camada as FeatureLayer;
+                    const url = urlCompletaDaCamada(featureLayer);
 
-                    webmap.add(camada);
+                    if (url) porUrl.set(normalizarUrl(url), featureLayer);
                 }
 
-                await camada.load();
+                const porId: Record<string, FeatureLayer> = {};
+
+                for (const config of CAMADAS_MODULO) {
+                    const chave = normalizarUrl(config.url);
+                    let camada = porUrl.get(chave);
+
+                    if (!camada) {
+                        camada = new FeatureLayer({
+                            id: config.id,
+                            title: config.titulo,
+                            url: config.url,
+                            popupEnabled: true,
+                        });
+
+                        webmap.add(camada);
+                    }
+
+                    porId[config.id] = camada;
+                }
+
+                await Promise.all(Object.values(porId).map((camada) => camada.load().catch(() => null)));
 
                 // Sem "*", o popup e o hitTest só devolvem os campos do portal.
-                camada.outFields = ["*"];
+                for (const camada of Object.values(porId)) {
+                    camada.outFields = ["*"];
+                }
 
-                // O webmap pode trazê-la desligada; aqui ela é o motivo do módulo existir.
-                camada.visible = true;
-
-                console.debug("Camada de Luanda:", {
-                    titulo: camada.title,
-                    visivel: camada.visible,
-                    minScale: camada.minScale,
-                    temRenderer: !!camada.renderer,
-                });
-
-                if (!cancelado) onCamada?.(camada);
+                if (!cancelado) onCamadas?.(porId);
             } catch (e) {
-                console.error("Falha ao carregar a camada de Luanda:", e);
+                console.error("Falha ao carregar as camadas do módulo Luanda:", e);
             }
 
             if (cancelado) return;

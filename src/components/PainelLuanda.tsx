@@ -8,7 +8,7 @@ import { MapaLuanda } from "./MapaLuanda";
 import { asset } from "../lib/utils";
 import { criarRenderer, lerLegenda } from "../lib/simbologia";
 import { comCondicao, construirWhere, formatarNumero } from "../lib/arcgis";
-import { CAMPO_INSCRICAO, FILTROS_LUANDA, INSCRICOES, TITULO_LUANDA } from "../lib/luanda";
+import { AREAS_LUANDA, CAMADAS_MODULO } from "../lib/luanda";
 
 const LARGURA_ABA = 320;
 
@@ -17,14 +17,15 @@ interface PainelLuandaProps {
 }
 
 /**
- * Módulo Luanda: webmap, camada e filtros próprios.
+ * Módulo Luanda: webmap e camadas próprios.
  *
- * Não tem áreas, estados, validação, controlo nem edição — a camada não tem
- * esses campos. O que existe é a divisão administrativa e o campo Inscricao.
+ * Cada área traz a sua camada, os seus filtros e o seu campo de contagem — as
+ * fichas de campos não coincidem, por isso a troca de área troca tudo isso.
  */
 export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
     const [abaAberta, setAbaAberta] = useState(true);
     const [filtroAberto, setFiltroAberto] = useState<string | null>(null);
+    const [areaId, setAreaId] = useState<string>(AREAS_LUANDA[0].id);
     const [selecoes, setSelecoes] = useState<Record<string, string>>({});
     const [simbologiaDoWebmap, setSimbologiaDoWebmap] = useState(true);
 
@@ -33,68 +34,89 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
     const [total, setTotal] = useState<number | null>(null);
     const [coresMapa, setCoresMapa] = useState<Record<string, string>>({});
     const [rotulosMapa, setRotulosMapa] = useState<Record<string, string>>({});
+    const [escala, setEscala] = useState<number | null>(null);
 
-    const [camada, setCamada] = useState<FeatureLayer | null>(null);
+    const [camadas, setCamadas] = useState<Record<string, FeatureLayer>>({});
     const [aConsultar, setAConsultar] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
 
-    /** Escala atual, para avisar quando a camada está escondida por ser demasiado longe. */
-    const [escala, setEscala] = useState<number | null>(null);
-
-    const rendererOriginalRef = useRef<FeatureLayer["renderer"] | null>(null);
+    /** Renderers tal como vieram do webmap, por camada, para os poder repor. */
+    const renderersOriginaisRef = useRef<Record<string, FeatureLayer["renderer"]>>({});
     const viewRef = useRef<MapView | null>(null);
     const viewpointInicialRef = useRef<Viewpoint | null>(null);
-    /** Não mexer na câmara na primeira consulta, antes de haver escolha nenhuma. */
     const primeiraConsultaRef = useRef(true);
+
+    const area = AREAS_LUANDA.find((a) => a.id === areaId) || AREAS_LUANDA[0];
+    const camada = camadas[area.camada.id] || null;
 
     const handleViewReady = useCallback((view: MapView) => {
         viewRef.current = view;
         viewpointInicialRef.current = view.viewpoint.clone();
         setEscala(view.scale);
 
-        // A camada tem minScale: acima dele o ArcGIS esconde-a, e o utilizador
+        // As camadas têm minScale: acima dele o ArcGIS esconde-as, e o utilizador
         // fica a ver o mapa vazio sem perceber porquê.
         view.watch("scale", (nova: number) => setEscala(nova));
     }, []);
 
-    const handleCamada = useCallback((encontrada: FeatureLayer) => {
-        setCamada(encontrada);
+    const handleCamadas = useCallback((encontradas: Record<string, FeatureLayer>) => {
+        setCamadas(encontradas);
     }, []);
 
-    // Simbologia: a do portal, ou a nossa construída a partir de INSCRICOES.
+    // Trocar de área invalida as escolhas: os campos de cada camada são outros.
+    useEffect(() => {
+        setSelecoes({});
+        setFiltroAberto(null);
+    }, [areaId]);
+
+    // Só a camada da área escolhida fica visível; as outras ficam sem filtro.
+    useEffect(() => {
+        for (const config of CAMADAS_MODULO) {
+            const layer = camadas[config.id];
+            if (!layer) continue;
+
+            const ativa = config.id === area.camada.id;
+            layer.visible = ativa;
+
+            if (!ativa) layer.definitionExpression = "";
+        }
+    }, [camadas, area]);
+
+    // Simbologia: a do portal, ou a nossa construída a partir dos valores da área.
     useEffect(() => {
         if (!camada) return;
 
-        if (rendererOriginalRef.current === null) {
-            rendererOriginalRef.current = camada.renderer;
+        if (!(area.camada.id in renderersOriginaisRef.current)) {
+            renderersOriginaisRef.current[area.camada.id] = camada.renderer;
         }
 
-        // Nunca atribuir um renderer vazio: se o do portal ainda não estiver
-        // resolvido, a camada deixaria de ser desenhada de todo.
-        const doWebmap = rendererOriginalRef.current;
+        const doWebmap = renderersOriginaisRef.current[area.camada.id];
 
+        // Nunca atribuir um renderer vazio: a camada deixaria de ser desenhada.
         camada.renderer =
-            simbologiaDoWebmap && doWebmap ? doWebmap : criarRenderer(CAMPO_INSCRICAO, INSCRICOES);
+            simbologiaDoWebmap && doWebmap ? doWebmap : criarRenderer(area.campoContagem, area.valores);
 
-        // A legenda lê o renderer em uso, para nunca mentir sobre o mapa.
         const legenda = lerLegenda(camada.renderer);
-        const aplicavel = legenda.campo === CAMPO_INSCRICAO;
+        const aplicavel = legenda.campo === area.campoContagem;
 
         setCoresMapa(aplicavel ? legenda.cores : {});
         setRotulosMapa(aplicavel ? legenda.rotulos : {});
-    }, [camada, simbologiaDoWebmap]);
+    }, [camada, area, simbologiaDoWebmap]);
 
     // Filtro, opções em cascata e contagens.
     useEffect(() => {
         if (!camada) return;
 
         let cancelado = false;
-        const where = construirWhere(selecoes);
+
+        const base = area.camada.filtroBase;
+        const comBase = (clausula: string) => (base ? comCondicao(clausula, base) : clausula);
+        const where = comBase(construirWhere(selecoes));
 
         camada.definitionExpression = where;
         setAConsultar(true);
 
-        /** Leva a câmara ao que ficou filtrado; sem filtros, volta à vista inicial. */
+        /** Leva a câmara ao que ficou filtrado; sem filtros, à extensão da camada. */
         async function enquadrar(layer: FeatureLayer, clausula: string) {
             const view = viewRef.current;
             if (!view) return;
@@ -105,12 +127,6 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
             }
 
             try {
-                if (clausula === "1=1") {
-                    const inicial = viewpointInicialRef.current;
-                    if (inicial) await view.goTo(inicial);
-                    return;
-                }
-
                 const { count, extent } = await layer.queryExtent({ where: clausula });
 
                 if (cancelado || count === 0 || !extent) return;
@@ -121,12 +137,48 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
             }
         }
 
-        async function carregar(layer: FeatureLayer) {
+        /**
+         * Contagens e opções correm em paralelo e não esperam umas pelas outras.
+         * Na camada de Luanda, com dois milhões de registos, as consultas de
+         * valores distintos são lentas — e antes prendiam os números do cartão.
+         */
+        async function carregarContagens(layer: FeatureLayer) {
+            try {
+                const totais = await Promise.all(
+                    area.valores.map(
+                        async (v) =>
+                            [
+                                v.valor,
+                                await layer.queryFeatureCount({
+                                    where: comCondicao(where, `${area.campoContagem} = ${v.valor}`),
+                                }),
+                            ] as const,
+                    ),
+                );
+
+                const universo = await layer.queryFeatureCount({ where });
+
+                if (cancelado) return;
+
+                setContagens(Object.fromEntries(totais));
+                setTotal(universo);
+                setErro(null);
+
+                await enquadrar(layer, where);
+            } catch (e) {
+                if (cancelado) return;
+
+                console.error("Falha ao contar:", e);
+                setErro("Não foi possível obter as contagens do serviço.");
+            }
+        }
+
+        async function carregarOpcoes(layer: FeatureLayer) {
             try {
                 const listas = await Promise.all(
-                    FILTROS_LUANDA.map(async (filtro) => {
+                    area.filtros.map(async (filtro) => {
                         const resultado = await layer.queryFeatures({
-                            where: construirWhere(selecoes, filtro.campo),
+                            where: comBase(construirWhere(selecoes, filtro.campo)),
                             outFields: [filtro.campo],
                             returnDistinctValues: true,
                             returnGeometry: false,
@@ -141,44 +193,23 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
                     }),
                 );
 
-                const totais = await Promise.all(
-                    INSCRICOES.map(
-                        async (i) =>
-                            [
-                                i.valor,
-                                await layer.queryFeatureCount({
-                                    where: comCondicao(where, `${CAMPO_INSCRICAO} = ${i.valor}`),
-                                }),
-                            ] as const,
-                    ),
-                );
-
-                const universo = await layer.queryFeatureCount({ where });
-
-                if (cancelado) return;
-
-                setOpcoes(Object.fromEntries(listas));
-                setContagens(Object.fromEntries(totais));
-                setTotal(universo);
-                setErro(null);
-
-                await enquadrar(layer, where);
+                if (!cancelado) setOpcoes(Object.fromEntries(listas));
             } catch (e) {
                 if (cancelado) return;
 
-                console.error("Falha ao consultar a camada de Luanda:", e);
-                setErro("Não foi possível obter os dados do serviço.");
+                console.error("Falha ao obter as opções dos filtros:", e);
             } finally {
                 if (!cancelado) setAConsultar(false);
             }
         }
 
-        carregar(camada);
+        carregarContagens(camada);
+        carregarOpcoes(camada);
 
         return () => {
             cancelado = true;
         };
-    }, [camada, selecoes]);
+    }, [camada, area, selecoes]);
 
     function selecionar(campo: string, valor: string | null) {
         setSelecoes((atual) => {
@@ -211,9 +242,8 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
     }
 
     const filtrosAtivos = Object.keys(selecoes).length;
+    const areaAberta = filtroAberto === "area";
 
-    // minScale vem do portal: acima dele a camada não é desenhada, por opção de quem
-    // a publicou — são dois milhões de polígonos.
     const minScale = camada?.minScale || 0;
     const longeDemais = !!escala && minScale > 0 && escala > minScale;
 
@@ -242,7 +272,7 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
                         </div>
 
                         <h1 className="text-white text-xs md:text-sm font-semibold leading-tight truncate">
-                            Cadastro de {TITULO_LUANDA}
+                            Cadastro de Luanda
                         </h1>
                     </div>
 
@@ -263,7 +293,45 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
                     <div className="h-full overflow-y-auto px-6 py-6" style={{ width: LARGURA_ABA }}>
                         <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mb-3">Filtros</h2>
 
-                        {FILTROS_LUANDA.map((filtro) => {
+                        {/* ÁREA troca a camada, e com ela os filtros e as contagens. */}
+                        <div className="border-b border-white/10">
+                            <button
+                                type="button"
+                                onClick={() => setFiltroAberto(areaAberta ? null : "area")}
+                                aria-expanded={areaAberta}
+                                className="w-full flex items-center justify-between gap-3 py-3 text-white text-sm hover:text-[#7fb3e0] transition-colors"
+                            >
+                                <span className="text-left">ÁREA</span>
+
+                                <span className="flex items-center gap-2 shrink-0">
+                                    <span className="max-w-[110px] truncate text-xs text-[#7fb3e0]">{area.label}</span>
+                                    <ChevronDown
+                                        className={`w-4 h-4 transition-transform ${areaAberta ? "rotate-180" : ""}`}
+                                    />
+                                </span>
+                            </button>
+
+                            {areaAberta && (
+                                <div className="pb-3 space-y-1">
+                                    {AREAS_LUANDA.map((opcao) => (
+                                        <button
+                                            key={opcao.id}
+                                            type="button"
+                                            onClick={() => setAreaId(opcao.id)}
+                                            className={`w-full text-left px-3 py-1.5 rounded text-xs transition-colors ${
+                                                areaId === opcao.id
+                                                    ? "bg-[#1e6fd9] text-white"
+                                                    : "text-white/80 hover:bg-white/10"
+                                            }`}
+                                        >
+                                            {opcao.label}
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        {area.filtros.map((filtro) => {
                             const aberto = filtroAberto === filtro.id;
                             const lista = opcoes[filtro.campo] || [];
                             const escolhido = selecoes[filtro.campo];
@@ -348,7 +416,7 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
                         <div className="flex rounded-lg bg-[#0e2242] p-1">
                             {[
                                 { doWebmap: true, label: "Webmap" },
-                                { doWebmap: false, label: "Inscrição" },
+                                { doWebmap: false, label: area.campoContagem },
                             ].map((opcao) => (
                                 <button
                                     key={opcao.label}
@@ -365,17 +433,14 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
                             ))}
                         </div>
 
-                        <p className="mt-6 text-[11px] text-white/40 leading-snug">
-                            O campo Inscrição não tem domínio definido no portal, por isso os rótulos são os próprios
-                            códigos.
-                        </p>
+                        <p className="mt-6 text-[11px] text-white/40 leading-snug">Camada: {area.camada.titulo}.</p>
 
                         {erro && <p className="mt-4 text-xs text-[#e08a8a]">{erro}</p>}
                     </div>
                 </motion.aside>
 
                 <div className="relative flex-1">
-                    <MapaLuanda className="absolute inset-0 z-0" onViewReady={handleViewReady} onCamada={handleCamada} />
+                    <MapaLuanda className="absolute inset-0 z-0" onViewReady={handleViewReady} onCamadas={handleCamadas} />
 
                     {longeDemais && (
                         <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 max-w-[90%]">
@@ -432,14 +497,14 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
                         </button>
                     </div>
 
-                    <div className="absolute bottom-10 right-6 z-10 w-[240px] max-w-[calc(100%-3rem)] bg-[#0b1c38]/95 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden">
+                    <div className="absolute bottom-10 right-6 z-10 w-[250px] max-w-[calc(100%-3rem)] bg-[#0b1c38]/95 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden">
                         <div className="bg-[#12294d] px-5 py-4">
-                            <p className="text-white/70 text-sm truncate">{selecoes.Municipio || "Toda a província"}</p>
+                            <p className="text-white/70 text-sm truncate">{area.label}</p>
                             <p className="text-white text-2xl font-bold tracking-wide">LUANDA</p>
                         </div>
 
                         <div className="px-5 py-4 space-y-2">
-                            {INSCRICOES.map((item) => (
+                            {area.valores.map((item) => (
                                 <div key={item.valor} className="flex items-center gap-3">
                                     <span
                                         className="w-4 h-4 rounded shrink-0"
@@ -452,7 +517,12 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
                                     </span>
 
                                     <span className="bg-[#0e2242] rounded-md px-2 py-1 min-w-[70px] text-center text-white text-sm font-bold">
-                                        {contagens[item.valor] === undefined ? "—" : formatarNumero(contagens[item.valor])}
+                                        {contagens[item.valor] === undefined
+                                            ? // Distingue "ainda a contar" de "sem resposta".
+                                              aConsultar
+                                                ? "…"
+                                                : "—"
+                                            : formatarNumero(contagens[item.valor])}
                                     </span>
                                 </div>
                             ))}

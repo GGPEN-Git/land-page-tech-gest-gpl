@@ -494,7 +494,7 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda }: Dashbo
     }
 
     function reporFiltros() {
-        setAreaId(null);
+        // A área mantém-se: é sempre uma das duas, nunca "nenhuma".
         setSelecoes({});
         setFiltroAberto(null);
     }
@@ -518,7 +518,8 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda }: Dashbo
         });
     }
 
-    const filtrosAtivos = Object.keys(selecoes).length + (areaId ? 1 : 0);
+    // A área não conta: está sempre escolhida, não é um filtro que se limpe.
+    const filtrosAtivos = Object.keys(selecoes).length;
     const areaAberta = filtroAberto === "area";
 
     return (
