@@ -105,7 +105,8 @@ export const CONFORMIDADES: Conformidade[] = [
  * duas vezes: uma corre no motor do ArcGIS, a outra no nosso código.
  * Devolve `"<id da conformidade>|<valor do controlo>"`.
  */
-export const EXPRESSAO_CONFORMIDADE = `
+export function expressaoConformidade(campoControlo: string) {
+    return `
 function diagnostico() {
     var estado = $feature.Estado;
     if (estado == 0 || estado == 'Não Inscrito') { return '${NAO_INSCRITO.id}'; }
@@ -133,9 +134,10 @@ function diagnostico() {
     return '${REGULARIZADO.id}';
 }
 
-var controlo = IIf(IsEmpty($feature.GGPEN_Controlo), 0, $feature.GGPEN_Controlo);
+var controlo = IIf(IsEmpty($feature.${campoControlo}), 0, $feature.${campoControlo});
 return diagnostico() + '|' + controlo;
 `;
+}
 
 type Atributos = Record<string, unknown>;
 

@@ -14,7 +14,19 @@ const BASE = "https://services-eu1.arcgis.com/7r9gTPdSG9MPi1LZ/arcgis/rest/servi
 export const CAMPO_AOI = "AOI";
 export const CAMPO_ESTADO = "Estado";
 export const CAMPO_VALIDACAO = "Validacao";
-export const CAMPO_CONTROLO = "GGPEN_Controlo";
+/**
+ * O campo de controlo não tem o mesmo nome nas duas camadas: republicar a partir
+ * de um shapefile trunca os nomes a 10 caracteres, e foi o que aconteceu a
+ * `RESIDENCIAS_EM_RISCO`. Procura-se por esta ordem, e usa-se o que existir.
+ */
+export const CAMPOS_CONTROLO = ["GGPEN_Controlo", "GGPEN_Cont"];
+
+/** Devolve o nome do campo de controlo nesta camada, ou null se não o tiver. */
+export function campoControloDe(campos?: { name: string }[] | null): string | null {
+    if (!campos) return null;
+
+    return CAMPOS_CONTROLO.find((nome) => campos.some((c) => c.name === nome)) || null;
+}
 
 export interface CamadaConfig {
     id: string;
@@ -140,11 +152,11 @@ export const CONTROLOS: ContagemConfig[] = [
     { valor: VALOR_POR_VERIFICAR, label: "Por verificar", cor: "#ffd166" },
 ];
 
-/** "Por verificar" apanha o zero e o nulo. */
-export function condicaoControlo(valor: number): string {
+/** "Por verificar" apanha o zero e o nulo. O campo varia conforme a camada. */
+export function condicaoControlo(campo: string, valor: number): string {
     return valor === VALOR_POR_VERIFICAR
-        ? `(${CAMPO_CONTROLO} IS NULL OR ${CAMPO_CONTROLO} = ${VALOR_POR_VERIFICAR})`
-        : `${CAMPO_CONTROLO} = ${valor}`;
+        ? `(${campo} IS NULL OR ${campo} = ${VALOR_POR_VERIFICAR})`
+        : `${campo} = ${valor}`;
 }
 
 /** Duplica plicas — o where vai para SQL do lado do servidor. */

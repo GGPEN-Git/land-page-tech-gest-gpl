@@ -2,7 +2,7 @@ import UniqueValueRenderer from "@arcgis/core/renderers/UniqueValueRenderer";
 import SimpleFillSymbol from "@arcgis/core/symbols/SimpleFillSymbol";
 import SimpleLineSymbol from "@arcgis/core/symbols/SimpleLineSymbol";
 import { COR_POR_OMISSAO, CONTROLOS, VALOR_POR_VERIFICAR, type ContagemConfig } from "./arcgis";
-import { CONFORMIDADES, EXPRESSAO_CONFORMIDADE } from "./conformidade";
+import { CONFORMIDADES, expressaoConformidade } from "./conformidade";
 
 /**
  * Preenchimento a cheio, como antes, mas com o contorno da mesma cor e da
@@ -85,7 +85,7 @@ export function lerLegenda(renderer: unknown): LegendaLida {
  * Como o diagnóstico não é um campo mas uma expressão, o renderer classifica por
  * `valueExpression` e há um símbolo por cada combinação das duas.
  */
-export function criarRendererControlo() {
+export function criarRendererControlo(campoControlo: string) {
     const infos = [];
 
     for (const conformidade of CONFORMIDADES) {
@@ -104,7 +104,7 @@ export function criarRendererControlo() {
     const porVerificar = CONTROLOS.find((c) => c.valor === VALOR_POR_VERIFICAR);
 
     return new UniqueValueRenderer({
-        valueExpression: EXPRESSAO_CONFORMIDADE,
+        valueExpression: expressaoConformidade(campoControlo),
         valueExpressionTitle: "Controlo e conformidade",
         // Rede de segurança: uma combinação nova cai aqui em vez de desaparecer.
         defaultSymbol: preenchimento(porVerificar?.cor || COR_POR_OMISSAO),

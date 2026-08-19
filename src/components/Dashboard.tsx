@@ -19,12 +19,12 @@ import {
     CAMADAS,
     CAMADAS_EDIFICIOS,
     CAMPO_AOI,
-    CAMPO_CONTROLO,
     CAMPO_ESTADO,
     CONTROLOS,
     ESTADOS,
     FILTROS,
     VALOR_POR_VERIFICAR,
+    campoControloDe,
     comCondicao,
     condicaoControlo,
     construirWhere,
@@ -119,8 +119,9 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda }: Dashbo
      * e só existe nas camadas que declarem o campo GGPEN_Controlo.
      */
     const camadaUnica = configsAtivas.length === 1 ? camadas[configsAtivas[0].id] : null;
-    const temCampoControlo = !!camadaUnica?.fields?.some((c) => c.name === CAMPO_CONTROLO);
-    const podeControlo = papel === "admin" && configsAtivas.length === 1 && temCampoControlo;
+    // O nome do campo difere entre camadas — ver CAMPOS_CONTROLO.
+    const campoControlo = campoControloDe(camadaUnica?.fields);
+    const podeControlo = papel === "admin" && configsAtivas.length === 1 && !!campoControlo;
     const configControlo = podeControlo ? configsAtivas[0] : null;
 
     const principais = ESTADOS;
@@ -193,9 +194,9 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda }: Dashbo
                     conformidade: classificar(atributos),
                     // null quando ainda não houve análise — distinto de "Por verificar".
                     controlo:
-                        atributos[CAMPO_CONTROLO] === null || atributos[CAMPO_CONTROLO] === undefined
+                        atributos[campoControlo!] === null || atributos[campoControlo!] === undefined
                             ? null
-                            : Number(atributos[CAMPO_CONTROLO]),
+                            : Number(atributos[campoControlo!]),
                 });
                 setAviso(null);
             } catch (e) {
@@ -224,7 +225,7 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda }: Dashbo
                     new Graphic({
                         attributes: {
                             [layer.objectIdField]: selecionado.objectid,
-                            [CAMPO_CONTROLO]: valor,
+                            [campoControlo!]: valor,
                         },
                     }),
                 ],
@@ -285,7 +286,7 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda }: Dashbo
                         async (c) =>
                             [
                                 c.valor,
-                                await layer.queryFeatureCount({ where: comCondicao(clausula, condicaoControlo(c.valor)) }),
+                                await layer.queryFeatureCount({ where: comCondicao(clausula, condicaoControlo(campoControlo!, c.valor)) }),
                             ] as const,
                     ),
                 );
@@ -319,10 +320,10 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda }: Dashbo
                 continue;
             }
 
-            // Em controlo não há campo por que colorir: usa-se um contorno de alto
-            // contraste para os polígonos se lerem bem sobre a imagem de satélite.
-            if (colorirPor === "controlo") {
-                layer.renderer = criarRendererControlo();
+            // O diagnóstico é uma expressão, não um campo; e o nome do campo de
+            // controlo varia conforme a camada, daí ser passado ao renderer.
+            if (colorirPor === "controlo" && campoControlo) {
+                layer.renderer = criarRendererControlo(campoControlo);
                 continue;
             }
 

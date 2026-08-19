@@ -38,13 +38,23 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
     const [aConsultar, setAConsultar] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
 
+    /** Escala atual, para avisar quando a camada está escondida por ser demasiado longe. */
+    const [escala, setEscala] = useState<number | null>(null);
+
     const rendererOriginalRef = useRef<FeatureLayer["renderer"] | null>(null);
     const viewRef = useRef<MapView | null>(null);
     const viewpointInicialRef = useRef<Viewpoint | null>(null);
+    /** Não mexer na câmara na primeira consulta, antes de haver escolha nenhuma. */
+    const primeiraConsultaRef = useRef(true);
 
     const handleViewReady = useCallback((view: MapView) => {
         viewRef.current = view;
         viewpointInicialRef.current = view.viewpoint.clone();
+        setEscala(view.scale);
+
+        // A camada tem minScale: acima dele o ArcGIS esconde-a, e o utilizador
+        // fica a ver o mapa vazio sem perceber porquê.
+        view.watch("scale", (nova: number) => setEscala(nova));
     }, []);
 
     const handleCamada = useCallback((encontrada: FeatureLayer) => {
@@ -59,9 +69,12 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
             rendererOriginalRef.current = camada.renderer;
         }
 
-        camada.renderer = simbologiaDoWebmap
-            ? rendererOriginalRef.current
-            : criarRenderer(CAMPO_INSCRICAO, INSCRICOES);
+        // Nunca atribuir um renderer vazio: se o do portal ainda não estiver
+        // resolvido, a camada deixaria de ser desenhada de todo.
+        const doWebmap = rendererOriginalRef.current;
+
+        camada.renderer =
+            simbologiaDoWebmap && doWebmap ? doWebmap : criarRenderer(CAMPO_INSCRICAO, INSCRICOES);
 
         // A legenda lê o renderer em uso, para nunca mentir sobre o mapa.
         const legenda = lerLegenda(camada.renderer);
@@ -80,6 +93,33 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
 
         camada.definitionExpression = where;
         setAConsultar(true);
+
+        /** Leva a câmara ao que ficou filtrado; sem filtros, volta à vista inicial. */
+        async function enquadrar(layer: FeatureLayer, clausula: string) {
+            const view = viewRef.current;
+            if (!view) return;
+
+            if (primeiraConsultaRef.current) {
+                primeiraConsultaRef.current = false;
+                return;
+            }
+
+            try {
+                if (clausula === "1=1") {
+                    const inicial = viewpointInicialRef.current;
+                    if (inicial) await view.goTo(inicial);
+                    return;
+                }
+
+                const { count, extent } = await layer.queryExtent({ where: clausula });
+
+                if (cancelado || count === 0 || !extent) return;
+
+                await view.goTo(extent.expand(1.2));
+            } catch (e) {
+                console.debug("Não foi possível enquadrar a seleção:", e);
+            }
+        }
 
         async function carregar(layer: FeatureLayer) {
             try {
@@ -121,6 +161,8 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
                 setContagens(Object.fromEntries(totais));
                 setTotal(universo);
                 setErro(null);
+
+                await enquadrar(layer, where);
             } catch (e) {
                 if (cancelado) return;
 
@@ -169,6 +211,11 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
     }
 
     const filtrosAtivos = Object.keys(selecoes).length;
+
+    // minScale vem do portal: acima dele a camada não é desenhada, por opção de quem
+    // a publicou — são dois milhões de polígonos.
+    const minScale = camada?.minScale || 0;
+    const longeDemais = !!escala && minScale > 0 && escala > minScale;
 
     return (
         <div className="h-screen overflow-hidden flex flex-col bg-black font-sans">
@@ -329,6 +376,18 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
 
                 <div className="relative flex-1">
                     <MapaLuanda className="absolute inset-0 z-0" onViewReady={handleViewReady} onCamada={handleCamada} />
+
+                    {longeDemais && (
+                        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-30 max-w-[90%]">
+                            <p
+                                role="status"
+                                className="rounded-lg bg-[#0b1c38]/95 backdrop-blur-sm px-4 py-2 text-sm text-white/80 shadow-lg"
+                            >
+                                Aproxime para ver os edifícios — só são desenhados a partir de 1:
+                                {formatarNumero(minScale)}.
+                            </p>
+                        </div>
+                    )}
 
                     <button
                         type="button"

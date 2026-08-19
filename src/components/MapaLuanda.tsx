@@ -74,6 +74,16 @@ export function MapaLuanda({ className = "absolute inset-0", onViewReady, onCama
                 // Sem "*", o popup e o hitTest só devolvem os campos do portal.
                 camada.outFields = ["*"];
 
+                // O webmap pode trazê-la desligada; aqui ela é o motivo do módulo existir.
+                camada.visible = true;
+
+                console.debug("Camada de Luanda:", {
+                    titulo: camada.title,
+                    visivel: camada.visible,
+                    minScale: camada.minScale,
+                    temRenderer: !!camada.renderer,
+                });
+
                 if (!cancelado) onCamada?.(camada);
             } catch (e) {
                 console.error("Falha ao carregar a camada de Luanda:", e);

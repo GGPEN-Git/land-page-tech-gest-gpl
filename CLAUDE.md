@@ -127,7 +127,9 @@ Atenção ao `filtroBase`: um edifício criado sem `AOI = 'Boavista'` fica invis
 
 ### Modo Controlo
 
-Quarto modo do seletor, **só para admin**. Grava no campo **`GGPEN_Controlo`** da camada, um inteiro editável **sem domínio definido no portal** — os códigos são convenção nossa, em `arcgis.ts`:
+Quarto modo do seletor, **só para admin**. Grava no campo de controlo da camada — que **não tem o mesmo nome nas duas**: `GGPEN_Controlo` em Sambizanga, `GGPEN_Cont` em Boavista, porque republicar a partir de shapefile trunca os nomes a 10 caracteres. `campoControloDe()` procura pelos nomes de `CAMPOS_CONTROLO` e devolve o que existir; nunca fixar o nome no código.
+
+O campo, um inteiro editável **sem domínio definido no portal** — os códigos são convenção nossa, em `arcgis.ts`:
 
 | Valor | Estado |
 |---|---|
