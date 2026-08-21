@@ -246,7 +246,7 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
                         </div>
 
                         <h1 className="text-white text-xs md:text-sm font-semibold leading-tight truncate">
-                            Cadastro — Município de Sambizanga
+                            Cadastro de Luanda
                         </h1>
                     </div>
 
@@ -370,7 +370,7 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
                         </div>
 
                         <p className="mt-6 text-[11px] text-white/40 leading-snug">
-                            Restrito ao município de Sambizanga, que inclui o bairro Boa Vista. O campo Inscrição não tem
+                            Restrito aos 11 bairros do levantamento, em Sambizanga e Ingombota. O campo Inscrição não tem
                             domínio no portal, por isso os rótulos são os próprios códigos.
                         </p>
 
@@ -438,7 +438,7 @@ export function PainelLuanda({ onVoltar }: PainelLuandaProps) {
 
                     <div className="absolute bottom-10 right-6 z-10 w-[250px] max-w-[calc(100%-3rem)] bg-[#0b1c38]/95 backdrop-blur-sm rounded-2xl shadow-2xl overflow-hidden">
                         <div className="bg-[#12294d] px-5 py-4">
-                            <p className="text-white/70 text-sm truncate">{selecoes.Bairro || "Sambizanga"}</p>
+                            <p className="text-white/70 text-sm truncate">{selecoes.Bairro || selecoes.Municipio || "Bairros do levantamento"}</p>
                             <p className="text-white text-2xl font-bold tracking-wide">LUANDA</p>
                         </div>
 

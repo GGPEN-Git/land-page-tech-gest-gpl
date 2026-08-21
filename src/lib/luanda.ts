@@ -13,15 +13,38 @@ const BASE = "https://services-eu1.arcgis.com/7r9gTPdSG9MPi1LZ/arcgis/rest/servi
 export const CAMPO_INSCRICAO = "Inscricao";
 
 /**
- * A camada tem 2 066 168 polígonos de toda a província. O módulo trata apenas
- * do município de Sambizanga — que inclui o bairro Boa Vista Q. 11 — e por isso
- * a restrição é fixa: entra em todas as consultas e a interface não a remove.
+ * Bairros do levantamento, tal como estão escritos na camada.
+ *
+ * Não se filtra por município: estes onze estão repartidos por **dois** —
+ * seis em Sambizanga e cinco em Ingombota. Filtrar por `Municipio` traria
+ * 21 bairros a mais e deixaria 5 de fora.
+ *
+ * A grafia tem de bater certo ao caractere: repare em "Kimbaria Q 3" sem ponto
+ * e em "Molhada Q.7" sem espaço.
  */
-export const FILTRO_BASE_LUANDA = "Municipio = 'Sambizanga'";
+export const BAIRROS_LUANDA = [
+    "Boa Vista Q. 11",
+    "Caranguejo Q. 2",
+    "Edipesca",
+    "Kimbaria Q 3",
+    "Landilson Q. 1",
+    "Madeira S3",
+    "Molhada Q.7",
+    "Morro dos Bois S5",
+    "Pedreira S1",
+    "Roque Santeiro S4",
+    "Seriango Q. 10",
+];
+
+/**
+ * Restrição fixa da camada: entra em todas as consultas — mapa, contagens e
+ * opções dos filtros — e a interface não a consegue remover.
+ */
+export const FILTRO_BASE_LUANDA = `Bairro IN (${BAIRROS_LUANDA.map((b) => `'${b.replace(/'/g, "''")}'`).join(", ")})`;
 
 export const CAMADA_LUANDA = {
     id: "luanda-nova",
-    titulo: "Sambizanga",
+    titulo: "Bairros do levantamento",
     url: `${BASE}/Luanda_Nova_gdb/FeatureServer/0`,
     filtroBase: FILTRO_BASE_LUANDA,
 };
@@ -32,11 +55,9 @@ export interface FiltroLuanda {
     campo: string;
 }
 
-/**
- * Sem Município: está fixo em Sambizanga pelo filtro de base, e um menu com uma
- * única opção não serve para nada.
- */
+/** Município continua a fazer sentido: os bairros repartem-se por dois. */
 export const FILTROS_LUANDA: FiltroLuanda[] = [
+    { id: "municipio", label: "MUNICÍPIO", campo: "Municipio" },
     { id: "comuna", label: "COMUNA", campo: "Comuna" },
     { id: "bairro", label: "BAIRRO", campo: "Bairro" },
     { id: "afetacao", label: "AFETAÇÃO", campo: "Afetacao" },
