@@ -6,7 +6,7 @@ import FeatureLayer from "@arcgis/core/layers/FeatureLayer";
 import "@arcgis/core/assets/esri/themes/light/main.css";
 
 import { ARCGIS_VERSION, normalizarUrl, urlCompletaDaCamada } from "../lib/arcgis";
-import { CAMADA_LUANDA, WEBMAP_LUANDA } from "../lib/luanda";
+import { CAMADA_LUANDA, FILTRO_BASE_LUANDA, WEBMAP_LUANDA } from "../lib/luanda";
 
 esriConfig.assetsPath = `https://js.arcgis.com/${ARCGIS_VERSION}/@arcgis/core/assets`;
 
@@ -78,6 +78,11 @@ export function MapaLuanda({ className = "absolute inset-0", onViewReady, onCama
                 // Sem "*", o popup e o hitTest só devolvem os campos do portal.
                 camada.outFields = ["*"];
                 camada.visible = true;
+
+                // Aplica-se já aqui, e não só quando o painel corre o seu efeito:
+                // senão a camada chega a ser desenhada uma vez sem filtro nenhum,
+                // com os dois milhões de polígonos da província.
+                camada.definitionExpression = FILTRO_BASE_LUANDA;
 
                 if (!cancelado) onCamada?.(camada);
             } catch (e) {
