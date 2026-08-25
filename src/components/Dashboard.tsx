@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ChevronDown, ChevronLeft, ChevronRight, Home, Map, Minus, Plus, RotateCcw, SquarePen } from "lucide-react";
+import { ChartColumn, ChevronDown, ChevronLeft, ChevronRight, Home, Map, Minus, Plus, RotateCcw, SquarePen } from "lucide-react";
 import Graphic from "@arcgis/core/Graphic";
 import type MapView from "@arcgis/core/views/MapView";
 import type Viewpoint from "@arcgis/core/Viewpoint";
@@ -40,9 +40,11 @@ interface DashboardProps {
     papel?: Papel;
     /** Abre o módulo de Luanda, que é independente deste painel. */
     onAbrirLuanda?: () => void;
+    /** Abre o painel de indicadores do levantamento. */
+    onAbrirEstatisticas?: () => void;
 }
 
-export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda }: DashboardProps) {
+export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda, onAbrirEstatisticas }: DashboardProps) {
     const [abaAberta, setAbaAberta] = useState(true);
     const [gestaoAberta, setGestaoAberta] = useState(false);
     const [senhaAberta, setSenhaAberta] = useState(false);
@@ -651,19 +653,44 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda }: Dashbo
                     aria-hidden={!abaAberta}
                 >
                     <div className="h-full overflow-y-auto px-6 py-6" style={{ width: LARGURA_ABA }}>
-                        {papel === "admin" && onAbrirLuanda && (
-                            <button
-                                type="button"
-                                onClick={onAbrirLuanda}
-                                className="w-full flex items-center justify-between gap-2 rounded-md bg-[#12294d] px-3 py-2.5 mb-6 text-sm text-white hover:bg-[#1a3a63] transition-colors"
-                            >
-                                <span className="flex items-center gap-2">
-                                    <Map className="w-4 h-4 shrink-0" />
-                                    Cadastro de Luanda
-                                </span>
+                        {(onAbrirEstatisticas || (papel === "admin" && onAbrirLuanda)) && (
+                            <section className="pb-6 mb-6 border-b border-white/10">
+                                <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mb-3">
+                                    Módulos
+                                </h2>
 
-                                <ChevronRight className="w-4 h-4 shrink-0 text-white/50" />
-                            </button>
+                                <div className="space-y-2">
+                                    {onAbrirEstatisticas && (
+                                        <button
+                                            type="button"
+                                            onClick={onAbrirEstatisticas}
+                                            className="w-full flex items-center justify-between gap-2 rounded-md bg-[#12294d] px-3 py-2.5 text-sm text-white hover:bg-[#1a3a63] transition-colors"
+                                        >
+                                            <span className="flex items-center gap-2">
+                                                <ChartColumn className="w-4 h-4 shrink-0" />
+                                                Indicadores
+                                            </span>
+
+                                            <ChevronRight className="w-4 h-4 shrink-0 text-white/50" />
+                                        </button>
+                                    )}
+
+                                    {papel === "admin" && onAbrirLuanda && (
+                                        <button
+                                            type="button"
+                                            onClick={onAbrirLuanda}
+                                            className="w-full flex items-center justify-between gap-2 rounded-md bg-[#12294d] px-3 py-2.5 text-sm text-white hover:bg-[#1a3a63] transition-colors"
+                                        >
+                                            <span className="flex items-center gap-2">
+                                                <Map className="w-4 h-4 shrink-0" />
+                                                Cadastro de Luanda
+                                            </span>
+
+                                            <ChevronRight className="w-4 h-4 shrink-0 text-white/50" />
+                                        </button>
+                                    )}
+                                </div>
+                            </section>
                         )}
 
                         <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mb-3">Filtros</h2>
@@ -780,9 +807,11 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda }: Dashbo
                             Repor filtros
                         </button>
 
-                        <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mt-8 mb-3">
-                            Colorir mapa por
+                        <h2 className="text-white/50 text-xs font-semibold tracking-[0.15em] uppercase mt-8 pt-6 mb-3 border-t border-white/10">
+                            Apresentação
                         </h2>
+
+                        <p className="text-white/40 text-[11px] mb-2">Colorir mapa por</p>
 
                         {papel === "admin" ? (
                             <div className="flex rounded-lg bg-[#0e2242] p-1">

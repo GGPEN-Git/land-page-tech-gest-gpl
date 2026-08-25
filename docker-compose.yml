@@ -1,6 +1,8 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    # postgres:16 e não a variante alpine: a imagem alpine descarregada nesta
+    # máquina é de outra arquitetura e devolve "exec format error".
+    image: postgres:16
     container_name: techgest-postgres
     restart: unless-stopped
 
@@ -10,8 +12,9 @@ services:
       POSTGRES_DB: techgest
 
     ports:
-      # Porta 5433 no anfitrião para não chocar com um Postgres já instalado na 5432.
-      - "5433:5432"
+      # 5432, 5433 e 5434 já estão ocupadas por outros projetos nesta máquina
+      # (nextjs_postgres, techagro-db e conselho_crianca_db).
+      - "5435:5432"
 
     volumes:
       - dados-postgres:/var/lib/postgresql/data

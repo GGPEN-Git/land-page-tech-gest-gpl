@@ -12,6 +12,7 @@ export const WEBMAP_ID = "56676e3af62748e29429492cafb1ed23";
 const BASE = "https://services-eu1.arcgis.com/7r9gTPdSG9MPi1LZ/arcgis/rest/services";
 
 export const CAMPO_AOI = "AOI";
+export const CAMPO_BAIRRO = "Bairro";
 export const CAMPO_ESTADO = "Estado";
 export const CAMPO_VALIDACAO = "Validacao";
 /**
@@ -50,13 +51,24 @@ export const CAMADA_DADOS: CamadaConfig = {
     filtroBase: `${CAMPO_AOI} = 'Boavista'`,
 };
 
+/**
+ * Bairros da área "Novas Áreas". A camada tem oito; só estes três entram.
+ *
+ * Os nomes têm de ser escritos como estão gravados — `Molhada Q.7` não tem
+ * espaço depois do ponto e `Madeira S3` não tem ponto nenhum.
+ */
+export const BAIRROS_NOVAS_AREAS = ["Edipesca", "Madeira S3", "Molhada Q.7"];
+
 /** Segundo levantamento, com estrutura própria. */
 export const CAMADA_SAMBIZANGA: CamadaConfig = {
     id: "edificios-sambizanga",
-    titulo: "Edifícios — Sambizanga",
+    titulo: "Edifícios — Novas Áreas",
     url: `${BASE}/Residencias_em_Risco_Sambizanga/FeatureServer/0`,
     visivelPorOmissao: false,
     campoSimbologia: CAMPO_ESTADO,
+    // Pedreira, Roque Santeiro, Morro dos Bois, Boa Vista Q. 11 e Seriango
+    // ficam de fora — nem no mapa, nem nos filtros, nem nas contagens.
+    filtroBase: `${CAMPO_BAIRRO} IN (${BAIRROS_NOVAS_AREAS.map((b) => `'${escaparSql(b)}'`).join(", ")})`,
 };
 
 /** Contornos de área, 1 polígono cada. Enquadramento, não dados. */
@@ -91,7 +103,7 @@ export interface AreaConfig {
  */
 export const AREAS: AreaConfig[] = [
     { id: "boavista", label: "Boavista", camadaId: CAMADA_DADOS.id, aoi: "Boavista" },
-    { id: "sambizanga", label: "Sambizanga e novas áreas", camadaId: CAMADA_SAMBIZANGA.id },
+    { id: "sambizanga", label: "Novas Áreas", camadaId: CAMADA_SAMBIZANGA.id },
 ];
 
 export interface FiltroConfig {
