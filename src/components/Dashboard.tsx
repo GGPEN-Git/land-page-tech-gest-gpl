@@ -152,7 +152,7 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda, onAbrirE
      * sair daqui. É por isso que se procuram os que faltam e não os que estão
      * feitos: uma consulta só, em vez de uma por bairro.
      */
-    const [bairrosVerificados, setBairrosVerificados] = useState<Set<string>>(new Set());
+    const [bairrosConfirmados, setBairrosConfirmados] = useState<Set<string>>(new Set());
     const [contagens, setContagens] = useState<Record<number, number>>({});
     /** Contagens por categoria de conformidade, calculadas no browser. */
     const [conformidades, setConformidades] = useState<Record<string, number>>({});
@@ -610,13 +610,13 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda, onAbrirE
                     ESTADOS.map(async (e) => [e.valor, await somar(CAMPO_ESTADO, e.valor)] as const),
                 );
 
-                const verificados = await bairrosTodosValidados(alvos);
+                const confirmados = await bairrosTodosValidados(alvos);
 
                 if (cancelado) return;
 
                 setOpcoes(Object.fromEntries(listas));
                 setContagens(Object.fromEntries(totaisEstado));
-                setBairrosVerificados(verificados);
+                setBairrosConfirmados(confirmados);
                 setErro(null);
 
                 await enquadrar();
@@ -857,7 +857,7 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda, onAbrirE
                                                     <span className="truncate">{valor}</span>
 
                                                     {filtro.campo === CAMPO_BAIRRO && (
-                                                        <EtiquetaVerificado verificado={bairrosVerificados.has(valor)} />
+                                                        <EtiquetaConfirmado confirmado={bairrosConfirmados.has(valor)} />
                                                     )}
                                                 </button>
                                             ))}
@@ -1244,14 +1244,14 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda, onAbrirE
  * "Não verificado" — dizer outra coisa daria a entender que já não é preciso lá
  * voltar.
  */
-function EtiquetaVerificado({ verificado }: { verificado: boolean }) {
+function EtiquetaConfirmado({ confirmado }: { confirmado: boolean }) {
     return (
         <span
             className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium leading-4 ${
-                verificado ? "bg-[#16a34a]/20 text-[#7ee2a8]" : "bg-white/10 text-white/50"
+                confirmado ? "bg-[#16a34a]/20 text-[#7ee2a8]" : "bg-white/10 text-white/50"
             }`}
         >
-            {verificado ? "Verificado" : "Não verificado"}
+            {confirmado ? "Confirmado" : "Não confirmado"}
         </span>
     );
 }
