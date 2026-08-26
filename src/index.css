@@ -22,3 +22,50 @@
         @apply font-serif;
     }
 }
+
+/*
+ * Impressão — é assim que se exporta o painel de indicadores para PDF.
+ *
+ * Não há biblioteca de PDF no projeto, e não faz falta: o browser imprime a
+ * página como está, e os gráficos, sendo SVG e HTML, saem em vetor. Uma
+ * biblioteca teria de os redesenhar ou fotografá-los, e ficaria pior.
+ */
+@media print {
+    /* Sem isto o Chrome imprime a barra azul e as barras dos gráficos a branco. */
+    body {
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        background: #fff;
+    }
+
+    @page {
+        size: A4;
+        margin: 12mm;
+    }
+
+    /* Botões e controlos não têm utilidade em papel. */
+    .sem-impressao {
+        display: none !important;
+    }
+
+    /* Colada ao topo do ecrã, mas no papel tem de ficar onde está. */
+    .cabecalho-painel {
+        position: static !important;
+        box-shadow: none !important;
+    }
+
+    /* Um cartão partido a meio entre páginas não se lê. */
+    .cartao-impressao,
+    table,
+    tr {
+        break-inside: avoid;
+    }
+
+    /* As três distribuições lado a lado, como no relatório — a largura de
+       impressão nunca chega ao ponto de rutura `xl` do Tailwind. */
+    .grelha-impressao {
+        display: grid !important;
+        grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+        gap: 12px !important;
+    }
+}

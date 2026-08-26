@@ -72,6 +72,9 @@ export function ColunasAgrupadas({ categorias, series }: ColunasAgrupadasProps) 
                     <svg
                         width={largura}
                         height={ALTURA}
+                        // Ao imprimir, a página é mais estreita do que o ecrã e o
+                        // `ResizeObserver` já não chega a tempo — assim encolhe sozinho.
+                        style={{ maxWidth: "100%", height: "auto" }}
                         role="img"
                         aria-label={`Colunas agrupadas por ${categorias.join(", ")}`}
                     >

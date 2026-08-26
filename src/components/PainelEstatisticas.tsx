@@ -1,17 +1,15 @@
 import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
-import { ArrowLeft, Building2, Home, Layers, Ruler, Store, type LucideIcon } from "lucide-react";
+import { ArrowLeft, Building2, FileDown, Home, Layers, Ruler, Store, type LucideIcon } from "lucide-react";
 import FeatureLayer from "@arcgis/core/layers/FeatureLayer";
 import { asset } from "../lib/utils";
 import {
-    AREAS,
+    CAMADA_DADOS,
     CAMADA_SAMBIZANGA,
-    CAMADAS_EDIFICIOS,
     FILTRO_NOVAS_AREAS,
     comCondicao,
-    construirWhere,
     formatarNumero,
-    type AreaConfig,
+    type CamadaConfig,
 } from "../lib/arcgis";
 import { CAMPOS_ESTATISTICA, calcular, type Estatisticas } from "../lib/estatisticas";
 import { SERIES } from "../lib/graficos";
@@ -27,24 +25,101 @@ const PAGINA = 2000;
 /** Quantas linhas de uma distribuição se mostram antes do "ver as restantes". */
 const LIMITE_LISTA = 8;
 
-interface AreaIndicadores extends AreaConfig {
+interface Fonte {
+    config: CamadaConfig;
     /** Condição extra, só deste módulo, por cima do `filtroBase` da camada. */
     filtro?: string;
 }
 
+interface AreaIndicadores {
+    id: string;
+    label: string;
+    /** Título no corpo da página, quando o rótulo do botão é curto demais. */
+    titulo?: string;
+    /** As camadas a somar. Mais do que uma, e os números juntam-se. */
+    fontes: Fonte[];
+}
+
+const BOAVISTA: Fonte = { config: CAMADA_DADOS };
+
+// No mapa esta camada é Sambizanga inteira; aqui é só os bairros novos.
+const NOVAS_AREAS: Fonte = { config: CAMADA_SAMBIZANGA, filtro: FILTRO_NOVAS_AREAS };
+
 /**
  * Áreas deste painel.
  *
- * Reaproveitam as do dashboard, mas a segunda tem aqui rótulo e âmbito
- * próprios: "Novas Áreas", e só os três bairros novos. No mapa, a mesma camada
- * continua a chamar-se Sambizanga e a mostrar os oito — este módulo é que é
- * mais estreito, e não o contrário.
+ * "Todas" não é uma área — é a soma das outras duas. Funciona por os registos
+ * das duas camadas serem juntos num só conjunto antes de contar: os bairros não
+ * se repetem entre elas, e assim tipologias, afetações e áreas somam-se sem
+ * ninguém ter de as somar duas vezes.
  */
-const AREAS_INDICADORES: AreaIndicadores[] = AREAS.map((area) =>
-    area.camadaId === CAMADA_SAMBIZANGA.id
-        ? { ...area, label: "Novas Áreas", filtro: FILTRO_NOVAS_AREAS }
-        : area,
-);
+const AREAS_INDICADORES: AreaIndicadores[] = [
+    { id: "todas", label: "Todas", titulo: "Boavista e Novas Áreas", fontes: [BOAVISTA, NOVAS_AREAS] },
+    { id: "boavista", label: "Boavista", fontes: [BOAVISTA] },
+    { id: "novas-areas", label: "Novas Áreas", fontes: [NOVAS_AREAS] },
+];
+
+/** `filtroBase` da camada mais a condição própria deste módulo. */
+function whereDe(fonte: Fonte): string {
+    return [fonte.config.filtroBase, fonte.filtro].filter((c): c is string => !!c).reduce(comCondicao, "1=1");
+}
+
+/** Lê uma camada inteira, em páginas, e devolve os atributos. */
+async function lerRegistos(fonte: Fonte): Promise<Record<string, unknown>[]> {
+    // Camada avulsa, sem mapa: consultar não exige um MapView, e depender de um
+    // obrigaria a ter o mapa visível para o contentor ganhar tamanho.
+    const layer = new FeatureLayer({ url: fonte.config.url });
+    await layer.load();
+
+    const disponiveis = CAMPOS_ESTATISTICA.filter((c) => layer.fields?.some((f) => f.name === c));
+    const registos: Record<string, unknown>[] = [];
+    const where = whereDe(fonte);
+
+    for (let inicio = 0; ; inicio += PAGINA) {
+        const resposta = await layer.queryFeatures({
+            where,
+            outFields: disponiveis,
+            returnGeometry: false,
+            start: inicio,
+            num: PAGINA,
+            orderByFields: [layer.objectIdField],
+        });
+
+        registos.push(...resposta.features.map((f) => f.attributes));
+
+        if (resposta.features.length < PAGINA) break;
+    }
+
+    return registos;
+}
+
+/**
+ * Exporta o painel em PDF pela impressão do browser.
+ *
+ * O título do documento é o nome que o browser sugere ao gravar, por isso
+ * troca-se pelo nome do ficheiro e repõe-se a seguir. `print()` só devolve o
+ * controlo depois de a janela fechar, mas o `finally` protege o caso de a
+ * impressão ser cancelada.
+ */
+function exportarPdf(area: string, lidoEm: Date | null) {
+    const identificador = area
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/\p{Diacritic}/gu, "")
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, "");
+
+    const dia = (lidoEm ?? new Date()).toISOString().slice(0, 10);
+    const titulo = document.title;
+
+    document.title = `indicadores-${identificador}-${dia}`;
+
+    try {
+        window.print();
+    } finally {
+        document.title = titulo;
+    }
+}
 
 const VERDE = "#1a4d2e";
 const AZUL = "#1e6fd9";
@@ -63,55 +138,29 @@ export function PainelEstatisticas({ onVoltar }: PainelEstatisticasProps) {
     const [aCarregar, setACarregar] = useState(true);
     const [erro, setErro] = useState<string | null>(null);
 
+    // Quando a camada foi lida. Vai no cabeçalho e no nome do ficheiro exportado:
+    // sem isto, dois ficheiros do mesmo dia não se distinguem.
+    const [lidoEm, setLidoEm] = useState<Date | null>(null);
+
     const area = AREAS_INDICADORES.find((a) => a.id === areaId) || AREAS_INDICADORES[0];
-    const config = CAMADAS_EDIFICIOS.find((c) => c.id === area.camadaId) || CAMADAS_EDIFICIOS[0];
+    const titulo = area.titulo ?? area.label;
 
     useEffect(() => {
         let cancelado = false;
-
-        // Camada avulsa, sem mapa: consultar não exige um MapView, e depender de um
-        // obrigaria a ter o mapa visível para o contentor ganhar tamanho.
-        const layer = new FeatureLayer({ url: config.url });
-
-        const selecoes: Record<string, string> = area.aoi ? { AOI: area.aoi } : {};
-
-        // O `filtroBase` da camada e, por cima dele, o âmbito próprio deste módulo.
-        const where = [config.filtroBase, area.filtro]
-            .filter((c): c is string => !!c)
-            .reduce(comCondicao, construirWhere(selecoes));
 
         async function carregar() {
             setACarregar(true);
             setErro(null);
 
             try {
-                await layer.load();
+                const conjuntos = await Promise.all(area.fontes.map(lerRegistos));
 
-                const disponiveis = CAMPOS_ESTATISTICA.filter((c) => layer.fields?.some((f) => f.name === c));
-                const registos: Record<string, unknown>[] = [];
+                if (cancelado) return;
 
-                let inicio = 0;
-
-                // Uma passagem só, em páginas: os indicadores todos saem daqui.
-                for (;;) {
-                    const resposta = await layer.queryFeatures({
-                        where,
-                        outFields: disponiveis,
-                        returnGeometry: false,
-                        start: inicio,
-                        num: PAGINA,
-                        orderByFields: [layer.objectIdField],
-                    });
-
-                    if (cancelado) return;
-
-                    registos.push(...resposta.features.map((f) => f.attributes));
-
-                    if (resposta.features.length < PAGINA) break;
-                    inicio += PAGINA;
-                }
-
-                if (!cancelado) setDados(calcular(registos));
+                // Uma passagem só sobre tudo: com mais do que uma camada, os
+                // totais saem somados sem haver soma nenhuma a fazer à mão.
+                setDados(calcular(conjuntos.flat()));
+                setLidoEm(new Date());
             } catch (e) {
                 if (cancelado) return;
 
@@ -127,12 +176,12 @@ export function PainelEstatisticas({ onVoltar }: PainelEstatisticasProps) {
         return () => {
             cancelado = true;
         };
-    }, [config, area]);
+    }, [area]);
 
     return (
         <div className="min-h-screen flex flex-col bg-stone-100 font-sans text-stone-900">
             {/* Colada ao topo: a página é longa e o seletor de área tem de continuar à mão. */}
-            <header className="sticky top-0 z-20 shrink-0 bg-[#0b1c38] shadow-md">
+            <header className="cabecalho-painel sticky top-0 z-20 shrink-0 bg-[#0b1c38] shadow-md">
                 <div className="container mx-auto px-4 md:px-6 h-16 flex items-center justify-between gap-4">
                     <div className="flex items-center gap-3 min-w-0">
                         {onVoltar && (
@@ -140,7 +189,7 @@ export function PainelEstatisticas({ onVoltar }: PainelEstatisticasProps) {
                                 type="button"
                                 onClick={onVoltar}
                                 aria-label="Voltar ao painel"
-                                className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                                className="sem-impressao shrink-0 w-9 h-9 flex items-center justify-center rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors"
                             >
                                 <ArrowLeft className="w-5 h-5" />
                             </button>
@@ -162,8 +211,20 @@ export function PainelEstatisticas({ onVoltar }: PainelEstatisticasProps) {
                         </div>
                     </div>
 
-                    <div className="flex rounded-full bg-white/10 p-1 shrink-0">
-                        {AREAS_INDICADORES.map((opcao) => (
+                    <div className="flex items-center gap-3 shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => exportarPdf(titulo, lidoEm)}
+                            disabled={!dados || aCarregar}
+                            title="Exportar os indicadores em PDF"
+                            className="sem-impressao flex items-center gap-2 rounded-full bg-white/10 px-3 md:px-4 py-1.5 text-xs font-medium text-white/80 transition-colors hover:bg-white/20 hover:text-white disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white/10"
+                        >
+                            <FileDown className="w-4 h-4 shrink-0" />
+                            <span className="hidden sm:inline">Exportar PDF</span>
+                        </button>
+
+                        <div className="sem-impressao flex rounded-full bg-white/10 p-1">
+                            {AREAS_INDICADORES.map((opcao) => (
                             <button
                                 key={opcao.id}
                                 type="button"
@@ -175,8 +236,9 @@ export function PainelEstatisticas({ onVoltar }: PainelEstatisticasProps) {
                                 }`}
                             >
                                 {opcao.label}
-                            </button>
-                        ))}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 </div>
             </header>
@@ -202,11 +264,19 @@ export function PainelEstatisticas({ onVoltar }: PainelEstatisticasProps) {
                         className="space-y-8"
                     >
                         <div className="flex flex-wrap items-baseline justify-between gap-2">
-                            <h2 className="text-2xl md:text-3xl font-serif font-bold">{area.label}</h2>
+                            <h2 className="text-2xl md:text-3xl font-serif font-bold">{titulo}</h2>
 
                             <p className="text-sm text-stone-500">
                                 {formatarNumero(dados.porBairro.length)}{" "}
                                 {dados.porBairro.length === 1 ? "bairro" : "bairros"}
+                                {/* No papel não há como saber de quando são os números — a camada
+                                    muda ao longo do dia, e sem data o PDF não se pode citar. */}
+                                {lidoEm && (
+                                    <span className="hidden print:inline">
+                                        {" · dados lidos em "}
+                                        {lidoEm.toLocaleString("pt-PT")}
+                                    </span>
+                                )}
                             </p>
                         </div>
 
@@ -278,7 +348,7 @@ export function PainelEstatisticas({ onVoltar }: PainelEstatisticasProps) {
                             </Cartao>
                         </section>
 
-                        <section className="grid gap-6 xl:grid-cols-3">
+                        <section className="grelha-impressao grid gap-6 xl:grid-cols-3">
                             <Distribuicao
                                 titulo="Tipologia das habitações"
                                 base={dados.baseTipologias}
@@ -332,7 +402,7 @@ function percentagem(parte: number, total: number): string {
 }
 
 function Cartao({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-    return <div className={`rounded-2xl border border-stone-200 bg-white shadow-sm ${className}`}>{children}</div>;
+    return <div className={`cartao-impressao rounded-2xl border border-stone-200 bg-white shadow-sm ${className}`}>{children}</div>;
 }
 
 function Medida({ titulo, valor }: { titulo: string; valor: string }) {

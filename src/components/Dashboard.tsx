@@ -19,11 +19,13 @@ import {
     CAMADAS,
     CAMADAS_EDIFICIOS,
     CAMPO_AOI,
+    CAMPO_BAIRRO,
     CAMPO_ESTADO,
     CONTROLOS,
     ESTADOS,
     FILTROS,
     VALOR_POR_VERIFICAR,
+    VALOR_VALIDADO,
     campoControloDe,
     comCondicao,
     condicaoControlo,
@@ -33,6 +35,62 @@ import {
 
 /** Largura da aba lateral em px. */
 const LARGURA_ABA = 320;
+
+type CamadaAtiva = { config: (typeof CAMADAS_EDIFICIOS)[number]; layer: FeatureLayer };
+
+/**
+ * Bairros em que não sobra um único polígono por verificar.
+ *
+ * Pergunta-se pelo contrário — quais os bairros que **têm** algo por verificar —
+ * porque isso é uma consulta de valores distintos por camada, e não uma por
+ * bairro. O que não aparecer na resposta está inteiramente validado.
+ *
+ * Não depende dos filtros do utilizador de propósito: o rótulo diz o estado do
+ * bairro, não o estado do que está filtrado. Se dependesse, escolher um bairro
+ * mudaria o rótulo desse mesmo bairro.
+ */
+async function bairrosTodosValidados(alvos: CamadaAtiva[]): Promise<Set<string>> {
+    const todos = new Set<string>();
+    const pendentes = new Set<string>();
+
+    await Promise.all(
+        alvos.map(async ({ config, layer }) => {
+            const base = config.filtroBase ?? "1=1";
+
+            const distintos = async (where: string) => {
+                const resultado = await layer.queryFeatures({
+                    where,
+                    outFields: [CAMPO_BAIRRO],
+                    returnDistinctValues: true,
+                    returnGeometry: false,
+                });
+
+                return resultado.features
+                    .map((f) => f.attributes[CAMPO_BAIRRO])
+                    .filter((v): v is string => typeof v === "string" && v.trim() !== "");
+            };
+
+            const daCamada = await distintos(base);
+            for (const bairro of daCamada) todos.add(bairro);
+
+            // O campo tem nome diferente em cada camada, e pode não existir de
+            // todo — sem ele nada se pode dar por verificado.
+            const campo = campoControloDe(layer.fields);
+
+            if (!campo) {
+                for (const bairro of daCamada) pendentes.add(bairro);
+                return;
+            }
+
+            const porVerificar = comCondicao(base, `(${campo} <> ${VALOR_VALIDADO} OR ${campo} IS NULL)`);
+            for (const bairro of await distintos(porVerificar)) pendentes.add(bairro);
+        }),
+    );
+
+    for (const bairro of pendentes) todos.delete(bairro);
+
+    return todos;
+}
 
 interface DashboardProps {
     utilizador: Utilizador | null;
@@ -86,6 +144,15 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda, onAbrirE
     } | null>(null);
 
     const [opcoes, setOpcoes] = useState<Record<string, string[]>>({});
+
+    /**
+     * Bairros em que **todos** os polígonos têm o campo de controlo a 1.
+     *
+     * Basta um registo por verificar — a 0, a 2 ou por preencher — para o bairro
+     * sair daqui. É por isso que se procuram os que faltam e não os que estão
+     * feitos: uma consulta só, em vez de uma por bairro.
+     */
+    const [bairrosVerificados, setBairrosVerificados] = useState<Set<string>>(new Set());
     const [contagens, setContagens] = useState<Record<number, number>>({});
     /** Contagens por categoria de conformidade, calculadas no browser. */
     const [conformidades, setConformidades] = useState<Record<string, number>>({});
@@ -543,10 +610,13 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda, onAbrirE
                     ESTADOS.map(async (e) => [e.valor, await somar(CAMPO_ESTADO, e.valor)] as const),
                 );
 
+                const verificados = await bairrosTodosValidados(alvos);
+
                 if (cancelado) return;
 
                 setOpcoes(Object.fromEntries(listas));
                 setContagens(Object.fromEntries(totaisEstado));
+                setBairrosVerificados(verificados);
                 setErro(null);
 
                 await enquadrar();
@@ -780,11 +850,15 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda, onAbrirE
                                                     key={valor}
                                                     type="button"
                                                     onClick={() => selecionar(filtro.campo, valor)}
-                                                    className={`w-full text-left px-3 py-1.5 rounded text-xs transition-colors ${
+                                                    className={`w-full flex items-center justify-between gap-2 text-left px-3 py-1.5 rounded text-xs transition-colors ${
                                                         selecionado === valor ? "bg-[#1e6fd9] text-white" : "text-white/80 hover:bg-white/10"
                                                     }`}
                                                 >
-                                                    {valor}
+                                                    <span className="truncate">{valor}</span>
+
+                                                    {filtro.campo === CAMPO_BAIRRO && (
+                                                        <EtiquetaVerificado verificado={bairrosVerificados.has(valor)} />
+                                                    )}
                                                 </button>
                                             ))}
 
@@ -1160,5 +1234,24 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda, onAbrirE
 
             {senhaAberta && <AlterarPalavraPasse onFechar={() => setSenhaAberta(false)} />}
         </div>
+    );
+}
+
+/**
+ * Estado de verificação de um bairro inteiro.
+ *
+ * Só há dois estados: ou está tudo a 1, ou não está. Um bairro meio feito lê-se
+ * "Não verificado" — dizer outra coisa daria a entender que já não é preciso lá
+ * voltar.
+ */
+function EtiquetaVerificado({ verificado }: { verificado: boolean }) {
+    return (
+        <span
+            className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium leading-4 ${
+                verificado ? "bg-[#16a34a]/20 text-[#7ee2a8]" : "bg-white/10 text-white/50"
+            }`}
+        >
+            {verificado ? "Verificado" : "Não verificado"}
+        </span>
     );
 }
