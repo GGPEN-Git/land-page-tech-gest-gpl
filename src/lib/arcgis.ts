@@ -51,25 +51,31 @@ export const CAMADA_DADOS: CamadaConfig = {
     filtroBase: `${CAMPO_AOI} = 'Boavista'`,
 };
 
-/**
- * Bairros da área "Novas Áreas". A camada tem oito; só estes três entram.
- *
- * Os nomes têm de ser escritos como estão gravados — `Molhada Q.7` não tem
- * espaço depois do ponto e `Madeira S3` não tem ponto nenhum.
- */
-export const BAIRROS_NOVAS_AREAS = ["Edipesca", "Madeira S3", "Molhada Q.7"];
-
 /** Segundo levantamento, com estrutura própria. */
 export const CAMADA_SAMBIZANGA: CamadaConfig = {
     id: "edificios-sambizanga",
-    titulo: "Edifícios — Novas Áreas",
+    titulo: "Edifícios — Sambizanga",
     url: `${BASE}/Residencias_em_Risco_Sambizanga/FeatureServer/0`,
     visivelPorOmissao: false,
     campoSimbologia: CAMPO_ESTADO,
-    // Pedreira, Roque Santeiro, Morro dos Bois, Boa Vista Q. 11 e Seriango
-    // ficam de fora — nem no mapa, nem nos filtros, nem nas contagens.
-    filtroBase: `${CAMPO_BAIRRO} IN (${BAIRROS_NOVAS_AREAS.map((b) => `'${escaparSql(b)}'`).join(", ")})`,
 };
+
+/**
+ * Bairros das "Novas Áreas" — a camada de Sambizanga tem oito, e só estes dois
+ * contam como área nova.
+ *
+ * Vive fora de `CAMADA_SAMBIZANGA` de propósito: **não é um `filtroBase`**. O
+ * dashboard continua a mostrar a camada inteira; quem restringe é só o painel
+ * de indicadores, que aplica esta condição por cima.
+ *
+ * Os nomes têm de estar escritos como estão gravados — `Molhada Q.7` não tem
+ * espaço depois do ponto.
+ */
+export const BAIRROS_NOVAS_AREAS = ["Edipesca", "Molhada Q.7"];
+
+export const FILTRO_NOVAS_AREAS = `${CAMPO_BAIRRO} IN (${BAIRROS_NOVAS_AREAS.map(
+    (b) => `'${escaparSql(b)}'`,
+).join(", ")})`;
 
 /** Contornos de área, 1 polígono cada. Enquadramento, não dados. */
 export const CAMADAS_LIMITE: CamadaConfig[] = [
@@ -103,7 +109,7 @@ export interface AreaConfig {
  */
 export const AREAS: AreaConfig[] = [
     { id: "boavista", label: "Boavista", camadaId: CAMADA_DADOS.id, aoi: "Boavista" },
-    { id: "sambizanga", label: "Novas Áreas", camadaId: CAMADA_SAMBIZANGA.id },
+    { id: "sambizanga", label: "Sambizanga e novas áreas", camadaId: CAMADA_SAMBIZANGA.id },
 ];
 
 export interface FiltroConfig {

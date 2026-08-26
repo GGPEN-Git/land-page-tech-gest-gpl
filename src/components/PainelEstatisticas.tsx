@@ -3,7 +3,16 @@ import { motion } from "framer-motion";
 import { ArrowLeft, Building2, Home, Layers, Ruler, Store, type LucideIcon } from "lucide-react";
 import FeatureLayer from "@arcgis/core/layers/FeatureLayer";
 import { asset } from "../lib/utils";
-import { AREAS, CAMADAS_EDIFICIOS, comCondicao, construirWhere, formatarNumero } from "../lib/arcgis";
+import {
+    AREAS,
+    CAMADA_SAMBIZANGA,
+    CAMADAS_EDIFICIOS,
+    FILTRO_NOVAS_AREAS,
+    comCondicao,
+    construirWhere,
+    formatarNumero,
+    type AreaConfig,
+} from "../lib/arcgis";
 import { CAMPOS_ESTATISTICA, calcular, type Estatisticas } from "../lib/estatisticas";
 import { SERIES } from "../lib/graficos";
 import { BarrasHorizontais } from "./ui/BarrasHorizontais";
@@ -18,6 +27,25 @@ const PAGINA = 2000;
 /** Quantas linhas de uma distribuição se mostram antes do "ver as restantes". */
 const LIMITE_LISTA = 8;
 
+interface AreaIndicadores extends AreaConfig {
+    /** Condição extra, só deste módulo, por cima do `filtroBase` da camada. */
+    filtro?: string;
+}
+
+/**
+ * Áreas deste painel.
+ *
+ * Reaproveitam as do dashboard, mas a segunda tem aqui rótulo e âmbito
+ * próprios: "Novas Áreas", e só os três bairros novos. No mapa, a mesma camada
+ * continua a chamar-se Sambizanga e a mostrar os oito — este módulo é que é
+ * mais estreito, e não o contrário.
+ */
+const AREAS_INDICADORES: AreaIndicadores[] = AREAS.map((area) =>
+    area.camadaId === CAMADA_SAMBIZANGA.id
+        ? { ...area, label: "Novas Áreas", filtro: FILTRO_NOVAS_AREAS }
+        : area,
+);
+
 const VERDE = "#1a4d2e";
 const AZUL = "#1e6fd9";
 const TERRACOTA = "#c4703d";
@@ -30,12 +58,12 @@ const DOURADO = "#c4b03d";
  * não fica dependente de um `MapView` com contentor visível.
  */
 export function PainelEstatisticas({ onVoltar }: PainelEstatisticasProps) {
-    const [areaId, setAreaId] = useState<string>(AREAS[0].id);
+    const [areaId, setAreaId] = useState<string>(AREAS_INDICADORES[0].id);
     const [dados, setDados] = useState<Estatisticas | null>(null);
     const [aCarregar, setACarregar] = useState(true);
     const [erro, setErro] = useState<string | null>(null);
 
-    const area = AREAS.find((a) => a.id === areaId) || AREAS[0];
+    const area = AREAS_INDICADORES.find((a) => a.id === areaId) || AREAS_INDICADORES[0];
     const config = CAMADAS_EDIFICIOS.find((c) => c.id === area.camadaId) || CAMADAS_EDIFICIOS[0];
 
     useEffect(() => {
@@ -46,8 +74,11 @@ export function PainelEstatisticas({ onVoltar }: PainelEstatisticasProps) {
         const layer = new FeatureLayer({ url: config.url });
 
         const selecoes: Record<string, string> = area.aoi ? { AOI: area.aoi } : {};
-        const base = config.filtroBase;
-        const where = base ? comCondicao(construirWhere(selecoes), base) : construirWhere(selecoes);
+
+        // O `filtroBase` da camada e, por cima dele, o âmbito próprio deste módulo.
+        const where = [config.filtroBase, area.filtro]
+            .filter((c): c is string => !!c)
+            .reduce(comCondicao, construirWhere(selecoes));
 
         async function carregar() {
             setACarregar(true);
@@ -132,7 +163,7 @@ export function PainelEstatisticas({ onVoltar }: PainelEstatisticasProps) {
                     </div>
 
                     <div className="flex rounded-full bg-white/10 p-1 shrink-0">
-                        {AREAS.map((opcao) => (
+                        {AREAS_INDICADORES.map((opcao) => (
                             <button
                                 key={opcao.id}
                                 type="button"
