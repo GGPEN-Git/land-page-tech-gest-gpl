@@ -18,7 +18,6 @@ import {
     AREAS,
     CAMADAS,
     CAMADAS_EDIFICIOS,
-    CAMPO_AOI,
     CAMPO_BAIRRO,
     CAMPO_ESTADO,
     CONTROLOS,
@@ -37,6 +36,11 @@ import {
 const LARGURA_ABA = 320;
 
 type CamadaAtiva = { config: (typeof CAMADAS_EDIFICIOS)[number]; layer: FeatureLayer };
+
+/** O filtroBase da camada por cima do where do utilizador. Cada camada tem o seu. */
+function comBase(clausula: string, base?: string): string {
+    return base ? comCondicao(clausula, base) : clausula;
+}
 
 /**
  * Bairros em que não sobra um único polígono por verificar.
@@ -108,7 +112,7 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda, onAbrirE
     const [senhaAberta, setSenhaAberta] = useState(false);
     const [filtroAberto, setFiltroAberto] = useState<string | null>(null);
 
-    /** Área escolhida — decide a camada ativa e, quando aplicável, o valor de AOI. */
+    /** Área escolhida — decide a camada ativa. Nulo = todas. */
     const [areaId, setAreaId] = useState<string | null>(null);
     /** Seleção dos restantes filtros (campo → valor). */
     const [selecoes, setSelecoes] = useState<Record<string, string>>({});
@@ -349,12 +353,8 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda, onAbrirE
 
         let cancelado = false;
 
-        const efetivas = area?.aoi ? { ...selecoes, [CAMPO_AOI]: area.aoi } : selecoes;
-
-        const whereDe = (config: (typeof CAMADAS_EDIFICIOS)[number]) => {
-            const clausula = construirWhere(efetivas);
-            return config.filtroBase ? comCondicao(clausula, config.filtroBase) : clausula;
-        };
+        const whereDe = (config: (typeof CAMADAS_EDIFICIOS)[number]) =>
+            comBase(construirWhere(selecoes), config.filtroBase);
 
         const CAMPOS = ["Estado", "Num_Edif", "NIF_Prop", "Tipologia", "Afetacao"];
         const PAGINA = 2000;
@@ -427,10 +427,7 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda, onAbrirE
 
         let cancelado = false;
 
-        const efetivas = area?.aoi ? { ...selecoes, [CAMPO_AOI]: area.aoi } : selecoes;
-        const clausula = configControlo.filtroBase
-            ? comCondicao(construirWhere(efetivas), configControlo.filtroBase)
-            : construirWhere(efetivas);
+        const clausula = comBase(construirWhere(selecoes), configControlo.filtroBase);
 
         async function contar() {
             try {
@@ -514,15 +511,9 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda, onAbrirE
 
         let cancelado = false;
 
-        // O AOI da área só existe para a camada de Boavista; quando está definido,
-        // essa é de qualquer forma a única camada ativa.
-        const efetivas = area?.aoi ? { ...selecoes, [CAMPO_AOI]: area.aoi } : selecoes;
-
-        /** Cada camada tem o seu filtroBase, que a interface não remove. */
-        const whereDe = (config: (typeof CAMADAS_EDIFICIOS)[number], ignorar?: string) => {
-            const clausula = construirWhere(efetivas, ignorar);
-            return config.filtroBase ? comCondicao(clausula, config.filtroBase) : clausula;
-        };
+        /** O filtroBase da camada e o recorte da área, que a interface não remove. */
+        const whereDe = (config: (typeof CAMADAS_EDIFICIOS)[number], ignorar?: string) =>
+            comBase(construirWhere(selecoes, ignorar), config.filtroBase);
 
         const alvos = configsAtivas.map((config) => ({ config, layer: camadas[config.id] }));
 
@@ -541,7 +532,7 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda, onAbrirE
                 return;
             }
 
-            const semFiltros = Object.keys(efetivas).length === 0;
+            const semFiltros = Object.keys(selecoes).length === 0 && !area;
 
             try {
                 if (semFiltros) {

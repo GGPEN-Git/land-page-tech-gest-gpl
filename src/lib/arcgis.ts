@@ -41,41 +41,52 @@ export interface CamadaConfig {
     filtroBase?: string;
 }
 
-/** Camada principal: edifícios de Boavista. */
-export const CAMADA_DADOS: CamadaConfig = {
-    id: "residencias-em-risco",
-    titulo: "Edifícios — Boavista",
-    url: `${BASE}/RESIDENCIAS_EM_RISCO/FeatureServer/0`,
-    campoSimbologia: CAMPO_ESTADO,
-    // Porto Seco da Mulemba e os registos com AOI em branco ficam de fora.
-    filtroBase: `${CAMPO_AOI} = 'Boavista'`,
-};
-
-/** Segundo levantamento, com estrutura própria. */
-export const CAMADA_SAMBIZANGA: CamadaConfig = {
-    id: "edificios-sambizanga",
-    titulo: "Edifícios — Sambizanga",
-    url: `${BASE}/Residencias_em_Risco_Sambizanga/FeatureServer/0`,
-    visivelPorOmissao: false,
-    campoSimbologia: CAMPO_ESTADO,
-};
-
 /**
- * Bairros das "Novas Áreas" — a camada de Sambizanga tem oito, e só estes dois
- * contam como área nova.
+ * Bairros das "Novas Áreas".
  *
- * Vive fora de `CAMADA_SAMBIZANGA` de propósito: **não é um `filtroBase`**. O
- * dashboard continua a mostrar a camada inteira; quem restringe é só o painel
- * de indicadores, que aplica esta condição por cima.
- *
- * Os nomes têm de estar escritos como estão gravados — `Molhada Q.7` não tem
- * espaço depois do ponto.
+ * Estes registos vivem na mesma camada que Boavista, mas com o `AOI` a espaço —
+ * não é por `AOI` que se distinguem, é pelo bairro. Os nomes têm de estar
+ * escritos como estão gravados: `Molhada Q.7` não tem espaço depois do ponto.
  */
 export const BAIRROS_NOVAS_AREAS = ["Edipesca", "Molhada Q.7"];
 
 export const FILTRO_NOVAS_AREAS = `${CAMPO_BAIRRO} IN (${BAIRROS_NOVAS_AREAS.map(
     (b) => `'${escaparSql(b)}'`,
 ).join(", ")})`;
+
+export const FILTRO_BOAVISTA = `${CAMPO_AOI} = 'Boavista'`;
+
+/**
+ * Camada principal: Boavista, e com ela Edipesca e Molhada Q.7.
+ *
+ * Esses dois bairros existem nas duas camadas, com os mesmos registos. São
+ * lidos por esta, e o `filtroBase` da de Sambizanga larga-os. Fora ficam ainda
+ * o Porto Seco da Mulemba (bairro Mulembeira), os registos sem bairro e o
+ * único `Pedreira S1` perdido nesta camada.
+ */
+export const CAMADA_DADOS: CamadaConfig = {
+    id: "residencias-em-risco",
+    titulo: "Edifícios — Boavista",
+    url: `${BASE}/RESIDENCIAS_EM_RISCO/FeatureServer/0`,
+    campoSimbologia: CAMPO_ESTADO,
+    filtroBase: `(${FILTRO_BOAVISTA} OR ${FILTRO_NOVAS_AREAS})`,
+};
+
+/**
+ * Segundo levantamento, com estrutura própria.
+ *
+ * O `filtroBase` larga Edipesca e Molhada Q.7: esses bairros existem nas duas
+ * camadas, com os mesmos registos, e passaram a ser lidos pela de Boavista.
+ * Sem isto seriam contados a dobrar sempre que as duas camadas estão ativas.
+ */
+export const CAMADA_SAMBIZANGA: CamadaConfig = {
+    id: "edificios-sambizanga",
+    titulo: "Edifícios — Sambizanga",
+    url: `${BASE}/Residencias_em_Risco_Sambizanga/FeatureServer/0`,
+    visivelPorOmissao: false,
+    campoSimbologia: CAMPO_ESTADO,
+    filtroBase: `${CAMPO_BAIRRO} NOT IN (${BAIRROS_NOVAS_AREAS.map((b) => `'${escaparSql(b)}'`).join(", ")})`,
+};
 
 /** Contornos de área, 1 polígono cada. Enquadramento, não dados. */
 export const CAMADAS_LIMITE: CamadaConfig[] = [
@@ -99,16 +110,16 @@ export interface AreaConfig {
     label: string;
     /** Camada a mostrar e a consultar quando esta área está escolhida. */
     camadaId: string;
-    /** Valor de AOI a filtrar dentro dessa camada. Ausente = a camada inteira. */
-    aoi?: string;
 }
 
 /**
- * As áreas não vivem todas no mesmo sítio: Boavista é um valor do campo AOI numa
- * camada; Sambizanga é uma camada à parte, cujo AOI está vazio.
+ * Cada área é uma camada; quem as delimita é o `filtroBase` de cada uma. Não há
+ * aqui filtro nenhum de propósito — Edipesca e Molhada Q.7 entram em Boavista
+ * porque a camada de Boavista os inclui, e saem de Sambizanga porque a dela os
+ * exclui. As duas regras vivem uma ao lado da outra, junto às camadas.
  */
 export const AREAS: AreaConfig[] = [
-    { id: "boavista", label: "Boavista", camadaId: CAMADA_DADOS.id, aoi: "Boavista" },
+    { id: "boavista", label: "Boavista", camadaId: CAMADA_DADOS.id },
     { id: "sambizanga", label: "Sambizanga e novas áreas", camadaId: CAMADA_SAMBIZANGA.id },
 ];
 

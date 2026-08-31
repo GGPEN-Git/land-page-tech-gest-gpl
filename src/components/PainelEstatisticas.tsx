@@ -5,7 +5,7 @@ import FeatureLayer from "@arcgis/core/layers/FeatureLayer";
 import { asset } from "../lib/utils";
 import {
     CAMADA_DADOS,
-    CAMADA_SAMBIZANGA,
+    FILTRO_BOAVISTA,
     FILTRO_NOVAS_AREAS,
     comCondicao,
     formatarNumero,
@@ -40,21 +40,24 @@ interface AreaIndicadores {
     fontes: Fonte[];
 }
 
-const BOAVISTA: Fonte = { config: CAMADA_DADOS };
-
-// No mapa esta camada é Sambizanga inteira; aqui é só os bairros novos.
-const NOVAS_AREAS: Fonte = { config: CAMADA_SAMBIZANGA, filtro: FILTRO_NOVAS_AREAS };
+// As duas áreas saem da mesma camada: Boavista pelo AOI, as Novas Áreas pela
+// lista de bairros, porque nesses registos o AOI está a espaço.
+const BOAVISTA: Fonte = { config: CAMADA_DADOS, filtro: FILTRO_BOAVISTA };
+const NOVAS_AREAS: Fonte = { config: CAMADA_DADOS, filtro: FILTRO_NOVAS_AREAS };
 
 /**
  * Áreas deste painel.
  *
- * "Todas" não é uma área — é a soma das outras duas. Funciona por os registos
- * das duas camadas serem juntos num só conjunto antes de contar: os bairros não
- * se repetem entre elas, e assim tipologias, afetações e áreas somam-se sem
- * ninguém ter de as somar duas vezes.
+ * "Todas" não é uma área — é a soma das outras duas, e por isso dispensa filtro:
+ * o `filtroBase` da camada já é exatamente Boavista mais as Novas Áreas.
  */
 const AREAS_INDICADORES: AreaIndicadores[] = [
-    { id: "todas", label: "Todas", titulo: "Boavista e Novas Áreas", fontes: [BOAVISTA, NOVAS_AREAS] },
+    {
+        id: "todas",
+        label: "Todas",
+        titulo: "Boavista e Novas Áreas",
+        fontes: [{ config: CAMADA_DADOS }],
+    },
     { id: "boavista", label: "Boavista", fontes: [BOAVISTA] },
     { id: "novas-areas", label: "Novas Áreas", fontes: [NOVAS_AREAS] },
 ];

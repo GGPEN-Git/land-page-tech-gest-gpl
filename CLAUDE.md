@@ -46,24 +46,39 @@ index.html            → entry do Vite
 public/               → imagens estáticas (ex.: /boavista_mapa.png)
 src/
   index.tsx           → bootstrap do React
-  index.css           → @tailwind + @layer base (fontes, body, headings)
+  index.css           → @tailwind + @layer base + folha de impressão (PDF)
   App.tsx             → router manual + secções da landing + CTA final inline
-  lib/utils.ts        → cn() = twMerge(clsx(...))
-  lib/arcgis.ts       → WEBMAP_ID, CAMADAS, ARCGIS_VERSION
+  lib/
+    utils.ts          → cn() = twMerge(clsx(...)), asset()
+    arcgis.ts         → WEBMAP_ID, CAMADAS, ARCGIS_VERSION — módulo do mapa
+    luanda.ts         → idem, para o módulo Cadastro de Luanda
+    simbologia.ts     → renderers e lerLegenda()
+    conformidade.ts   → port em TS da expressão Arcade do webmap
+    estatisticas.ts   → cálculo dos indicadores e leitura do campo Tipologia
+    graficos.ts       → paleta validada, escalas, geometria das barras
+    api.ts            → cliente da API
   components/         → uma secção da página por ficheiro
     Navbar.tsx  Hero.tsx  Mission.tsx  HowItWorks.tsx
     Impact.tsx  Community.tsx  Footer.tsx
     Login.tsx         → portal de acesso (ecrã inteiro)
     Dashboard.tsx     → mapa + filtros + indicadores (ecrã inteiro)
     MapaArcGIS.tsx    → wrapper do MapView; expõe a view via onViewReady
-    ui/Button.tsx     → único primitivo reutilizável
+    ModuloEdicao.tsx  → widget Editor do ArcGIS, só admin
+    PainelLuanda.tsx  → módulo Cadastro de Luanda (ecrã inteiro, só admin)
+    MapaLuanda.tsx    → mapa próprio desse módulo
+    PainelEstatisticas.tsx → módulo Indicadores do levantamento (ecrã inteiro)
+    MenuConta.tsx  Utilizadores.tsx  AlterarPalavraPasse.tsx
+    ui/
+      Button.tsx
+      BarrasHorizontais.tsx  → barras de uma série
+      ColunasAgrupadas.tsx   → colunas de duas séries
 ```
 
 ## Navegação
 
-Não há `react-router`. `App.tsx` tem um `useState<"landing" | "login" | "dashboard">` e devolve cedo (`early return`) para `login` e `dashboard`; a landing é o fallback. O URL nunca muda.
+Não há `react-router`. `App.tsx` tem um `useState<"landing" | "login" | "dashboard" | "luanda" | "estatisticas">` e devolve cedo (`early return`) para cada uma; a landing é o fallback. **O URL nunca muda** — os módulos não são endereçáveis, e esconder um botão é a única forma de os tornar inalcançáveis.
 
-`landing → login` via prop `onLogin` no `Hero` e o CTA final; `login → dashboard` via `onSuccess`; `dashboard → landing` via `onLogout`.
+`landing → login` via prop `onLogin` no `Hero` e o CTA final; `login → dashboard` via `onSuccess`; `dashboard → landing` via `onLogout`; `dashboard → luanda` e `dashboard → estatisticas` pelos botões da secção **Módulos** da aba lateral.
 
 **Onde mexer:**
 - Nova secção da landing page → novo ficheiro em `src/components/`, importado e posicionado em `App.tsx`.
@@ -83,7 +98,7 @@ O webmap tem **quatro** camadas operacionais:
 | Camada | Papel |
 |---|---|
 | `RESIDENCIAS_EM_RISCO/FeatureServer/0` | **os dados** (`CAMADA_DADOS`) — Boavista & Porto Seco, 64 campos |
-| `Residencias_em_Risco_Sambizanga/FeatureServer/0` | outro conjunto de edifícios; `AOI`, `Tipologia`, `T_Constru` e `Afetacao` estão vazios — **não serve para filtrar** |
+| `Residencias_em_Risco_Sambizanga/FeatureServer/0` | outro conjunto de edifícios, 27 campos. **Larga Edipesca e Molhada Q.7 pelo `filtroBase`** — esses dois estão nas duas camadas com os mesmos registos, e quem os lê é a de Boavista |
 | `Boavista/FeatureServer/0` | contorno da área, sem atributos |
 | `Porto_Seco_Mulemba/FeatureServer/0` | contorno da área, sem atributos |
 
@@ -101,13 +116,13 @@ Atenção: cada camada é desenhada por um campo diferente. `CAMADA_DADOS` (Boav
 
 A camada de Sambizanga tem `Estado = 0` em todos os 1517 registos, pelo que o seu renderer a pinta inteiramente de vermelho. Como não entra nos filtros nem nas contagens, arranca oculta (`visivelPorOmissao: false`) e liga-se na secção **Camadas** da aba. `Boavista` e `Porto_Seco_Mulemba` têm 1 polígono cada — são contornos de área, não edifícios.
 
-O seletor **Colorir mapa por** tem três modos:
+O seletor **Colorir mapa por** tem três modos (o de Validação foi removido):
 
 | Modo | Efeito |
 |---|---|
 | **Webmap** (omissão) | Mantém o renderer do ArcGIS Online. Alterações de simbologia feitas no portal aparecem sem tocar no código |
 | **Estado** | `UniqueValueRenderer` construído por `lib/simbologia.ts` a partir de `ESTADOS` |
-| **Validação** | Idem, a partir de `VALIDACOES`. Indisponível quando Sambizanga está ativa |
+| **Controlo** | Só admin — ver abaixo |
 
 Os renderers originais são guardados em `renderersOriginaisRef` na primeira vez que cada camada é vista, e repostos ao voltar a "Webmap".
 
@@ -127,7 +142,7 @@ Atenção ao `filtroBase`: um edifício criado sem `AOI = 'Boavista'` fica invis
 
 ### Modo Controlo
 
-Quarto modo do seletor, **só para admin**. Grava no campo de controlo da camada — que **não tem o mesmo nome nas duas**: `GGPEN_Controlo` em Sambizanga, `GGPEN_Cont` em Boavista, porque republicar a partir de shapefile trunca os nomes a 10 caracteres. `campoControloDe()` procura pelos nomes de `CAMPOS_CONTROLO` e devolve o que existir; nunca fixar o nome no código.
+Terceiro modo do seletor, **só para admin**. Grava no campo de controlo da camada — que **não tem o mesmo nome nas duas**: `GGPEN_Controlo` em Sambizanga, `GGPEN_Cont` em Boavista, porque republicar a partir de shapefile trunca os nomes a 10 caracteres. `campoControloDe()` procura pelos nomes de `CAMPOS_CONTROLO` e devolve o que existir; nunca fixar o nome no código.
 
 O campo, um inteiro editável **sem domínio definido no portal** — os códigos são convenção nossa, em `arcgis.ts`:
 
@@ -163,7 +178,16 @@ Os assets do SDK (ícones, fontes) vêm do CDN via `esriConfig.assetsPath`. **Se
 
 **A ÁREA não é um filtro como os outros.** As três áreas não vivem no mesmo sítio: `Boavista` e `Porto Seco da Mulemba` são valores do campo `AOI` dentro de `CAMADA_DADOS`; `Sambizanga` é uma **camada à parte**, cujo `AOI` está vazio. O mapeamento vive em `AREAS` (`lib/arcgis.ts`), e escolher uma área pode trocar a camada ativa — daí estar fora de `FILTROS`.
 
-`CamadaConfig.filtroBase` é uma condição SQL aplicada **antes** de qualquer filtro do utilizador e que a interface não consegue remover. `CAMADA_DADOS` usa `AOI = 'Boavista'`: Porto Seco da Mulemba e os registos com `AOI` em branco não são desenhados nem contados. Entra em todas as consultas via o helper `comBase()` no `Dashboard`.
+`CamadaConfig.filtroBase` é uma condição SQL aplicada **antes** de qualquer filtro do utilizador e que a interface não consegue remover. É ele que delimita cada área — não há filtro de área à parte. Entra em todas as consultas via o helper `comBase()` no `Dashboard`.
+
+| Camada | `filtroBase` |
+|---|---|
+| Boavista | `(AOI = 'Boavista' OR Bairro IN ('Edipesca', 'Molhada Q.7'))` |
+| Sambizanga | `Bairro NOT IN ('Edipesca', 'Molhada Q.7')` |
+
+**Edipesca e Molhada Q.7 existem nas duas camadas, com os mesmos registos.** Uma inclui-os, a outra larga-os; as duas regras vivem lado a lado em `arcgis.ts`. Mexer numa sem a outra ou duplica os bairros em "Todas", ou fá-los desaparecer.
+
+Ficam de fora do painel: Porto Seco da Mulemba (bairro `Mulembeira`), os registos sem bairro, e um `Pedreira S1` perdido na camada de Boavista.
 
 Consequências no `Dashboard`:
 - `configsAtivas` é o conjunto de camadas de edifícios em uso. Com uma área escolhida é uma só; **sem área ("Todas") são as duas, e as contagens somam-se**. As camadas fora do conjunto ficam ocultas e com o `definitionExpression` limpo.
@@ -191,12 +215,50 @@ O `<main>` é um flex row: aba lateral (largura animada de 0 a `LARGURA_ABA`), p
 
 O único elemento por cima do mapa é a legenda de validação, no canto inferior direito, e é intencional: é a legenda do que está desenhado.
 
+A aba está dividida em quatro secções: **Módulos**, **Filtros**, **Apresentação** e **Edição**.
+
+Cada bairro da lista de filtros mostra **Confirmado** ou **Não confirmado** — confirmado só quando *todos* os polígonos do bairro têm o campo de controlo a 1. A consulta é feita ao contrário (que bairros *têm* algo por verificar), porque isso é uma consulta de valores distintos por camada em vez de uma por bairro. O rótulo **ignora os outros filtros de propósito**: se dependesse da seleção, escolher um bairro alterava o rótulo desse mesmo bairro.
+
+## Cadastro de Luanda (`PainelLuanda.tsx`)
+
+Módulo à parte, **só admin**, configurado em `src/lib/luanda.ts`. Webmap `6b9f7d26963d439aa499c1fc66fa55de`, camada `Luanda_Nova_gdb`.
+
+Tem mapa próprio (`MapaLuanda.tsx`) e **não reutiliza o `MapaArcGIS`** de propósito: são levantamentos diferentes, e partilhar o wrapper faria com que mexer num módulo mexesse no outro.
+
+A camada tem **mais de dois milhões de registos**; o `filtroBase` restringe-a aos 11 bairros do levantamento, por lista explícita em `BAIRROS_LUANDA`. Filtrar por município não serve — traz 21 bairros a mais e deixa 5 de fora, porque alguns pertencem à Ingombota. O preço é que um bairro novo não aparece até ser acrescentado à lista.
+
+A camada tem `minScale: 26667`: afastando o zoom o ArcGIS deixa de a desenhar, e o módulo mostra um aviso em vez de um mapa aparentemente vazio.
+
+## Indicadores do levantamento (`PainelEstatisticas.tsx`)
+
+Reproduz os indicadores do relatório oficial a partir das camadas, em tempo real. Admin **e** utilizador normal. Cálculo em `src/lib/estatisticas.ts`.
+
+**Não usa mapa**: cria uma `FeatureLayer` avulsa e consulta. Depender de um `MapView` obrigaria a ter o mapa visível para o contentor ganhar tamanho — foi exatamente isso que uma vez deixou a página presa em "A calcular indicadores…".
+
+Três âmbitos no seletor do topo: **Todas** (omissão), **Boavista** e **Novas Áreas**. A soma não é feita somando indicadores — os registos das duas camadas são juntos num só conjunto e contados de uma vez, o que evita somar percentagens ou bases.
+
+**"Novas Áreas" é um âmbito deste módulo, não da camada.** O `FILTRO_NOVAS_AREAS` vive fora de `CAMADA_SAMBIZANGA` de propósito: no painel do mapa a camada continua a ser Sambizanga inteira. Promovê-lo a `filtroBase` muda o mapa também — já aconteceu uma vez.
+
+Regras de contagem: imóveis = `Num_Edif` quando > 0, senão 1; habitações = imóveis com `Afetacao = 'Habitação'`; tipologias limitadas ao `Num_Edif` do polígono, com o que faltar em "Não indicado", para a base fechar com o número de habitações.
+
+**O campo `Tipologia` é texto livre e multi-valor.** 115 combinações distintas em Boavista, 88 em Sambizanga (estas com um espaço à frente): quatro separadores (`,` `-` `/` e quebra de linha), multiplicadores (`2T3`), tipologias coladas (`T0T2`), `TO` com letra O, vírgulas a mais (`T,2`). Quem o lê passa pelo `tipologiasDe()` — **nunca por um `split(",")`**.
+
+### Gráficos e PDF
+
+Sem biblioteca. `ui/ColunasAgrupadas.tsx` é SVG, `ui/BarrasHorizontais.tsx` é HTML, parâmetros em `lib/graficos.ts`.
+
+As cores `#2a78d6` e `#eb6834` são as duas primeiras de uma paleta categórica validada para protanopia e deuteranopia contra superfície clara. **Não são escolha de gosto** — alinhá-las com a paleta do site parte a separação.
+
+O gráfico de colunas desenha-se à largura medida do contentor (`ResizeObserver`), e não com `viewBox` elástico: com escala, uma coluna de 24px sai com 43 e o texto do eixo cresce na mesma proporção.
+
+O botão **Exportar PDF** chama `window.print()`; o resultado vem da folha `@media print` em `src/index.css`, que força a impressão a cores (`print-color-adjust: exact`, sem o qual o Chrome imprime a barra azul a branco), esconde os controlos (`.sem-impressao`), desprende o cabeçalho e força as três distribuições a três colunas — a largura de um A4 nunca chega ao ponto de rutura `xl` do Tailwind. Assim os gráficos vão em vetor; uma biblioteca de PDF teria de os redesenhar ou fotografá-los.
+
 ## Autenticação
 
 Real, contra Postgres. Não há registo aberto: a primeira conta nasce por linha de comando, as seguintes são criadas por um administrador dentro da aplicação.
 
 ```
-docker compose up -d       # Postgres local na 5433 (ou aponte a DATABASE_URL ao Supabase)
+docker compose up -d       # Postgres local na 5435 (ou aponte a DATABASE_URL ao Supabase)
 npm run db:migrar          # aplica db/schema.sql
 npm run db:semear          # cria admin + utilizador, imprime as senhas UMA vez
 npm run dev:api            # Express na 3000
@@ -210,6 +272,19 @@ O TLS da ligação é decidido pelo **destino** e não pelo `NODE_ENV` (`precisa
 `utilizadores.papel` é `admin` ou `utilizador`. Só `admin` acede a `/api/utilizadores` (listar, criar, ativar/desativar, promover).
 
 O botão de gestão no `Dashboard` aparece conforme o papel, mas isso é **conveniência, não segurança** — quem decide é o `exigirAdmin` no servidor, que lê o papel da base de dados a cada pedido.
+
+Quem vê o quê:
+
+| | Admin | Utilizador |
+|---|---|---|
+| Painel do mapa e filtros | sim | sim |
+| Indicadores do levantamento | sim | sim |
+| Cadastro de Luanda | sim | **não** |
+| Colorir mapa por | Webmap · Estado · Controlo | fixo em Estado |
+| Edição | sim | não |
+| Funcionários e acessos | sim | não |
+
+O Cadastro de Luanda e a Edição são gates **só do browser**: não passam pela nossa API, e as camadas do ArcGIS são públicas. A gestão de utilizadores é a única fechada do lado do servidor.
 
 Um admin não se pode desativar nem despromover a si próprio; sem isso seria possível ficar sem nenhum administrador.
 
