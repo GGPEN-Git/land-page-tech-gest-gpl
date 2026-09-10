@@ -110,6 +110,13 @@ export interface AreaConfig {
     label: string;
     /** Camada a mostrar e a consultar quando esta área está escolhida. */
     camadaId: string;
+    /**
+     * Contorno que delimita esta área, em `CAMADAS_LIMITE`. Só é desenhado com
+     * a área escolhida (ou sem escolha nenhuma) — de outro modo ficava o traço
+     * de Boavista pousado no mapa enquanto se olha para Sambizanga.
+     * Sambizanga não tem contorno publicado, daí ficar por preencher.
+     */
+    limiteId?: string;
 }
 
 /**
@@ -119,7 +126,7 @@ export interface AreaConfig {
  * exclui. As duas regras vivem uma ao lado da outra, junto às camadas.
  */
 export const AREAS: AreaConfig[] = [
-    { id: "boavista", label: "Boavista", camadaId: CAMADA_DADOS.id },
+    { id: "boavista", label: "Boavista", camadaId: CAMADA_DADOS.id, limiteId: "boavista" },
     { id: "sambizanga", label: "Sambizanga e novas áreas", camadaId: CAMADA_SAMBIZANGA.id },
 ];
 

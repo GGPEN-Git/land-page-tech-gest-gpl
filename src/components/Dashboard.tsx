@@ -214,14 +214,21 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda, onAbrirE
         setCamadas(encontradas);
     }, []);
 
-    // Ficam visíveis as camadas de edifícios ativas; os contornos seguem a configuração.
+    // Ficam visíveis as camadas de edifícios ativas e os contornos das áreas em vista.
     useEffect(() => {
+        // Contornos que pertencem a uma área. Sem área escolhida contam todos.
+        const limitesDeArea = new Set(AREAS.map((a) => a.limiteId).filter(Boolean) as string[]);
+        const limitesEmVista = new Set((area ? [area] : AREAS).map((a) => a.limiteId).filter(Boolean) as string[]);
+
         for (const [id, featureLayer] of Object.entries(camadas)) {
             const config = CAMADAS.find((c) => c.id === id);
             if (!config) continue;
 
             if (!config.campoSimbologia) {
-                featureLayer.visible = config.visivelPorOmissao !== false;
+                const porOmissao = config.visivelPorOmissao !== false;
+
+                // Os contornos sem área — como o do Porto Seco — seguem só a configuração.
+                featureLayer.visible = limitesDeArea.has(id) ? porOmissao && limitesEmVista.has(id) : porOmissao;
                 continue;
             }
 
@@ -232,7 +239,7 @@ export function Dashboard({ utilizador, onLogout, papel, onAbrirLuanda, onAbrirE
             if (!ativa) featureLayer.definitionExpression = "";
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [camadas, chaveCamadas]);
+    }, [camadas, chaveCamadas, areaId]);
 
     /** Clicar num polígono seleciona-o para controlo. */
     useEffect(() => {

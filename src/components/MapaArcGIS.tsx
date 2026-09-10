@@ -47,13 +47,51 @@ export function MapaArcGIS({ className = "absolute inset-0", onViewReady, onCama
                 await webmap.loadAll();
 
                 // Indexa as camadas que o webmap já traz, para não duplicar as configuradas.
-                const porUrl = new Map<string, FeatureLayer>();
+                const candidatas = new Map<string, FeatureLayer[]>();
 
                 for (const camada of webmap.allLayers.toArray()) {
                     const featureLayer = camada as FeatureLayer;
                     const url = urlCompletaDaCamada(featureLayer);
+                    if (!url) continue;
 
-                    if (url) porUrl.set(normalizarUrl(url), featureLayer);
+                    const chave = normalizarUrl(url);
+                    const iguais = candidatas.get(chave);
+
+                    if (iguais) iguais.push(featureLayer);
+                    else candidatas.set(chave, [featureLayer]);
+                }
+
+                const urlsConfiguradas = new Set(CAMADAS.map((c) => normalizarUrl(c.url)));
+                const porUrl = new Map<string, FeatureLayer>();
+
+                /**
+                 * O webmap pode trazer o mesmo serviço em duas camadas — é o caso de
+                 * "Residencias Risco Sambizanga" e "Edificios - Sambizanga", ambas sobre
+                 * `Residencias_em_Risco_Sambizanga`. Só uma delas ficava indexada, e a
+                 * gémea não recebia nem visibilidade nem `definitionExpression`: desenhava
+                 * Sambizanga inteiro por cima de Boavista, e fora das contagens.
+                 *
+                 * Fica a que o webmap tem visível — é a que traz a simbologia trabalhada —
+                 * e as repetidas saem do mapa. Só se desempata o que a aplicação controla:
+                 * repetições noutras camadas podem ser de propósito (contornos, halos).
+                 */
+                for (const [chave, iguais] of candidatas) {
+                    if (iguais.length === 1 || !urlsConfiguradas.has(chave)) {
+                        porUrl.set(chave, iguais[0]);
+                        continue;
+                    }
+
+                    const escolhida = iguais.find((c) => c.visible) || iguais[0];
+
+                    for (const repetida of iguais) {
+                        if (repetida === escolhida) continue;
+
+                        // Esconde antes de remover: `remove` só apanha as de primeiro nível.
+                        repetida.visible = false;
+                        webmap.remove(repetida);
+                    }
+
+                    porUrl.set(chave, escolhida);
                 }
 
                 for (const config of CAMADAS) {
