@@ -235,9 +235,11 @@ Reproduz os indicadores do relatório oficial a partir das camadas, em tempo rea
 
 **Não usa mapa**: cria uma `FeatureLayer` avulsa e consulta. Depender de um `MapView` obrigaria a ter o mapa visível para o contentor ganhar tamanho — foi exatamente isso que uma vez deixou a página presa em "A calcular indicadores…".
 
-Três âmbitos no seletor do topo: **Todas** (omissão), **Boavista** e **Novas Áreas**. A soma não é feita somando indicadores — os registos das duas camadas são juntos num só conjunto e contados de uma vez, o que evita somar percentagens ou bases.
+Três âmbitos no seletor do topo: **Todas** (omissão), **Boavista** e **Sambizanga**. A soma não é feita somando indicadores — os registos das duas camadas são juntos num só conjunto e contados de uma vez, o que evita somar percentagens ou bases.
 
-**"Novas Áreas" é um âmbito deste módulo, não da camada.** O `FILTRO_NOVAS_AREAS` vive fora de `CAMADA_SAMBIZANGA` de propósito: no painel do mapa a camada continua a ser Sambizanga inteira. Promovê-lo a `filtroBase` muda o mapa também — já aconteceu uma vez.
+**Não há âmbito "Novas Áreas".** Edipesca e Molhada Q.7 contam dentro de Boavista, que é a camada `CAMADA_DADOS` inteira — o `filtroBase` dela já os inclui. Sambizanga é a `CAMADA_SAMBIZANGA` inteira, e o `filtroBase` dela larga esses mesmos dois bairros; é isso, e só isso, que impede os registos repetidos de serem contados a dobrar em "Todas". Mexer num dos dois `filtroBase` sem o outro parte a conta.
+
+`FILTRO_NOVAS_AREAS` continua em `arcgis.ts` mas já não é usado por este módulo. Promovê-lo a `filtroBase` de `CAMADA_SAMBIZANGA` mudaria o painel do mapa também — já aconteceu uma vez.
 
 Regras de contagem: imóveis = `Num_Edif` quando > 0, senão 1; habitações = imóveis com `Afetacao = 'Habitação'`; tipologias limitadas ao `Num_Edif` do polígono, com o que faltar em "Não indicado", para a base fechar com o número de habitações.
 

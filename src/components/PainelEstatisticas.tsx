@@ -5,8 +5,7 @@ import FeatureLayer from "@arcgis/core/layers/FeatureLayer";
 import { asset } from "../lib/utils";
 import {
     CAMADA_DADOS,
-    FILTRO_BOAVISTA,
-    FILTRO_NOVAS_AREAS,
+    CAMADA_SAMBIZANGA,
     comCondicao,
     formatarNumero,
     type CamadaConfig,
@@ -40,26 +39,30 @@ interface AreaIndicadores {
     fontes: Fonte[];
 }
 
-// As duas áreas saem da mesma camada: Boavista pelo AOI, as Novas Áreas pela
-// lista de bairros, porque nesses registos o AOI está a espaço.
-const BOAVISTA: Fonte = { config: CAMADA_DADOS, filtro: FILTRO_BOAVISTA };
-const NOVAS_AREAS: Fonte = { config: CAMADA_DADOS, filtro: FILTRO_NOVAS_AREAS };
-
 /**
- * Áreas deste painel.
+ * Cada área é uma camada inteira, delimitada pelo `filtroBase` dela.
  *
- * "Todas" não é uma área — é a soma das outras duas, e por isso dispensa filtro:
- * o `filtroBase` da camada já é exatamente Boavista mais as Novas Áreas.
+ * Boavista leva consigo Edipesca e Molhada Q.7 — os antigos bairros das "Novas
+ * Áreas", que deixaram de ter âmbito próprio. Não é preciso filtro nenhum a mais:
+ * o `filtroBase` de `CAMADA_DADOS` já é `AOI = 'Boavista'` mais esses dois.
+ *
+ * Sambizanga é a outra camada, e o `filtroBase` dela larga precisamente esses
+ * dois bairros — é o que impede os registos, que existem nas duas camadas, de
+ * serem contados a dobrar em "Todas".
  */
+const BOAVISTA: Fonte = { config: CAMADA_DADOS };
+const SAMBIZANGA: Fonte = { config: CAMADA_SAMBIZANGA };
+
+/** "Todas" não é uma área — é a soma das outras duas, numa passagem só. */
 const AREAS_INDICADORES: AreaIndicadores[] = [
     {
         id: "todas",
         label: "Todas",
-        titulo: "Boavista e Novas Áreas",
-        fontes: [{ config: CAMADA_DADOS }],
+        titulo: "Boavista e Sambizanga",
+        fontes: [BOAVISTA, SAMBIZANGA],
     },
     { id: "boavista", label: "Boavista", fontes: [BOAVISTA] },
-    { id: "novas-areas", label: "Novas Áreas", fontes: [NOVAS_AREAS] },
+    { id: "sambizanga", label: "Sambizanga", fontes: [SAMBIZANGA] },
 ];
 
 /** `filtroBase` da camada mais a condição própria deste módulo. */
